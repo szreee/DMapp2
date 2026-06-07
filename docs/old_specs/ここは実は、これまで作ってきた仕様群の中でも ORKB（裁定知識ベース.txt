@@ -1,0 +1,739 @@
+ここは実は、これまで作ってきた仕様群の中でも **ORKB（裁定知識ベース）とDMVMを接続する最後の中核層** になります。
+
+なぜなら、
+
+```text
+AGS
+→ 構文を理解する
+
+SBS
+→ 参照先を理解する
+
+ATC
+→ テンプレートを理解する
+
+KAFS
+→ キーワードを理解する
+```
+
+まではできても、
+
+```text
+その能力は本当に裁定上同じ意味なのか？
+```
+
+はまだ分からないからです。
+
+例えばデュエマでは、
+
+```text
+カードを引く
+
+山札の上から1枚を手札に加える
+```
+
+は実質的に同じ処理です。
+
+一方、
+
+```text
+破壊する
+
+墓地に置く
+```
+
+は似ているようで全く別です。
+
+ERCSは、
+
+**能力の「表現」ではなく「意味」を比較するシステム**
+
+になります。
+
+---
+
+# Effect Equivalence & Ruling Consistency System (ERCS) v1.0
+
+## 目的
+
+ERCSは
+
+```text
+能力A
+能力B
+```
+
+が
+
+```text
+同じ意味か
+
+部分的に同じか
+
+完全に異なるか
+```
+
+を判定する。
+
+また
+
+```text
+公式裁定
+↓
+DSL
+↓
+Bytecode
+```
+
+の整合性を検証する。
+
+---
+
+# システム位置
+
+```text
+Card Text
+↓
+AGS
+↓
+SBS
+↓
+DSL
+↓
+ERCS
+↓
+ORKB
+```
+
+---
+
+# 基本思想
+
+比較対象は文章ではない。
+
+比較対象は
+
+```text
+Semantic Effect Graph
+```
+
+である。
+
+---
+
+# Semantic Effect Graph (SEG)
+
+能力を意味グラフへ変換する。
+
+---
+
+例
+
+```text
+カードを1枚引く
+```
+
+↓
+
+```text
+Draw
+ └ Count=1
+```
+
+---
+
+例
+
+```text
+山札の上から1枚を手札に加える
+```
+
+↓
+
+```text
+Move
+ ├ Source=DeckTop
+ ├ Destination=Hand
+ └ Count=1
+```
+
+---
+
+ERCSは
+
+```text
+Draw
+```
+
+と
+
+```text
+Move(DeckTop→Hand)
+```
+
+が等価であることを知っている。
+
+---
+
+# Effect Canonical Form (ECF)
+
+重要。
+
+全能力を正規形へ変換する。
+
+---
+
+例
+
+```text
+カードを引く
+```
+
+↓
+
+```json
+{
+  "Op":"Draw",
+  "Count":1
+}
+```
+
+---
+
+例
+
+```text
+山札の上から1枚手札に加える
+```
+
+↓
+
+```json
+{
+  "Canonical":"Draw",
+  "Count":1
+}
+```
+
+---
+
+# Equivalence Levels
+
+```cpp
+enum class EEquivalenceLevel
+{
+    Identical,
+
+    SemanticEquivalent,
+
+    ConditionalEquivalent,
+
+    Similar,
+
+    Different
+};
+```
+
+---
+
+## Identical
+
+DSLも完全一致。
+
+---
+
+## SemanticEquivalent
+
+DSLは違うが意味が同じ。
+
+---
+
+例
+
+```text
+Draw
+
+MoveDeckTopToHand
+```
+
+---
+
+## ConditionalEquivalent
+
+条件付きで同じ。
+
+---
+
+例
+
+```text
+クリーチャーを1体破壊
+
+パワー∞以下を破壊
+```
+
+---
+
+## Similar
+
+近いが違う。
+
+---
+
+## Different
+
+完全に別。
+
+---
+
+# Effect Signature
+
+能力指紋。
+
+---
+
+```cpp
+struct FEffectSignature
+{
+    EffectType;
+
+    Inputs[];
+
+    Outputs[];
+
+    SideEffects[];
+
+    Timing;
+
+    Conditions[];
+}
+```
+
+---
+
+例。
+
+```text
+Destroy
+```
+
+↓
+
+```json
+{
+  "EffectType":"Destroy",
+  "Input":"Creature",
+  "Output":"Graveyard"
+}
+```
+
+---
+
+# Canonical Action Catalog
+
+ERCS中核。
+
+---
+
+```cpp
+Draw
+
+Destroy
+
+Move
+
+Search
+
+Shuffle
+
+Reveal
+
+Tap
+
+Untap
+
+Attach
+
+Detach
+
+Evolve
+
+Awaken
+
+Release
+```
+
+---
+
+全能力をここへ還元。
+
+---
+
+# Semantic Distance
+
+能力間距離。
+
+---
+
+```cpp
+float CalculateDistance(
+    EffectA,
+    EffectB
+)
+```
+
+---
+
+例。
+
+```text
+Destroy
+
+Destroy TargetCreature
+```
+
+距離。
+
+```text
+0
+```
+
+---
+
+例。
+
+```text
+Destroy
+
+MoveToMana
+```
+
+距離。
+
+```text
+大
+```
+
+---
+
+# Ruling Mapping
+
+ORKB連携。
+
+---
+
+裁定。
+
+```text
+離れる
+```
+
+↓
+
+内部。
+
+```text
+LeaveBattleZone
+```
+
+---
+
+ERCS。
+
+```json
+{
+  "Term":"離れる",
+  "Canonical":
+  {
+      "ZoneChange":
+      "BattleZone→Other"
+  }
+}
+```
+
+---
+
+# Terminology Registry
+
+重要。
+
+---
+
+```cpp
+UTerminologyRegistry
+```
+
+---
+
+例。
+
+```text
+出す
+```
+
+↓
+
+```text
+PutIntoBattleZone
+```
+
+---
+
+例。
+
+```text
+召喚する
+```
+
+↓
+
+```text
+Summon
+```
+
+---
+
+別扱い。
+
+---
+
+# Contradiction Detection
+
+重要。
+
+---
+
+例。
+
+カードJSON。
+
+```json
+{
+  "Action":"Destroy"
+}
+```
+
+---
+
+裁定。
+
+```text
+破壊ではない
+```
+
+---
+
+検出。
+
+```text
+Contradiction
+```
+
+---
+
+# Ruling Consistency Check
+
+---
+
+能力。
+
+```text
+バトルゾーンを離れる時
+```
+
+---
+
+ORKB。
+
+```text
+破壊
+
+手札戻し
+
+マナ送り
+
+シールド化
+```
+
+を含む。
+
+---
+
+DSLと照合。
+
+---
+
+# Equivalent Ability Clustering
+
+BCIP向け。
+
+---
+
+22,000枚。
+
+↓
+
+ERCS。
+
+↓
+
+クラスタリング。
+
+---
+
+例。
+
+```text
+Draw1
+```
+
+能力。
+
+数千枚。
+
+↓
+
+1テンプレート化。
+
+---
+
+# Certification
+
+CCS連携。
+
+---
+
+能力。
+
+```text
+カードを1枚引く
+```
+
+↓
+
+DSL。
+
+```json
+{
+  "Action":"Draw"
+}
+```
+
+↓
+
+ERCS。
+
+```text
+Canonical=Draw
+```
+
+↓
+
+合格。
+
+---
+
+# LLM利用
+
+重要。
+
+---
+
+LLM出力。
+
+```json
+{
+   "Action":"Move",
+   "Source":"Deck",
+   "Destination":"Hand"
+}
+```
+
+---
+
+ERCS。
+
+```text
+Canonical=Draw
+```
+
+---
+
+補正可能。
+
+---
+
+# ERCSとORKB
+
+最終的には
+
+```text
+裁定文章
+
+↓
+
+RIR
+
+↓
+
+Canonical Effect
+
+↓
+
+ERCS
+
+↓
+
+DMVM
+```
+
+になる。
+
+---
+
+# ERCS v2で追加すべきもの
+
+ここまで来ると、DMVMはかなり完成しています。
+
+ただし、本当に紙デュエマ完全再現を目指すなら、最後に必要なのは
+
+# Comprehensive Rules Formalization System (CRFS)
+
+です。
+
+理由は単純で、
+
+今までは
+
+```text
+カード能力
+```
+
+を形式化していました。
+
+しかし実際のデュエマには
+
+* ターン進行
+* 攻撃ルール
+* シールドブレイク手順
+* ブロック手順
+* 勝敗判定
+* 山札切れ
+* 同時発生処理
+* 優先順位
+
+など、
+
+**カードに書かれていないゲームルールそのもの**
+
+が存在します。
+
+本当の意味での「紙デュエマ完全再現」を目指すなら、
+
+最後は総合ルールそのものを形式言語化する
+
+**CRFS (Comprehensive Rules Formalization System)**
+
+が必要になります。
+
+ここまで到達すると、DMVMは「ゲームエンジン」ではなく、「デュエマ総合ルールの実行系」になります。

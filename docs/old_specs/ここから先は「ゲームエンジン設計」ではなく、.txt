@@ -1,0 +1,763 @@
+ここから先は「ゲームエンジン設計」ではなく、
+
+```text
+カード定義プラットフォーム
+```
+
+の設計になります。
+
+実は、LLM利用前提なら最重要なのは
+
+```text
+LLMを信用しない
+```
+
+ことです。
+
+設計としては、
+
+```text
+カード画像
+↓
+LLM
+↓
+Card JSON生成
+↓
+Validator
+↓
+Compiler
+↓
+Bytecode
+↓
+ゲーム登録
+```
+
+であり、
+
+**RuleEngineはLLM出力を直接読まない**
+
+のが絶対条件です。
+
+---
+
+# Card Definition System v1.0
+
+## 設計目標
+
+達成したいこと
+
+```text
+カード画像から自動生成
+
+人手修正可能
+
+バージョン管理可能
+
+VMコンパイル可能
+
+安全
+```
+
+---
+
+# システム構成
+
+```text
+Card Registry
+
+├ Schema Validator
+├ Semantic Validator
+├ Rule Validator
+├ DSL Compiler
+├ Bytecode Compiler
+└ Version Manager
+```
+
+---
+
+# カードJSON構造
+
+最上位
+
+```json
+{
+  "CardID": "DMRP22-001",
+
+  "Version": 1,
+
+  "Name": "ボルシャック・ドラゴン",
+
+  "Type": "Creature",
+
+  "Civilizations": ["Fire"],
+
+  "Races": ["Armored Dragon"],
+
+  "Cost": 6,
+
+  "Power": 6000,
+
+  "Breaker": 2,
+
+  "Keywords": [],
+
+  "Effects": [],
+
+  "Metadata": {}
+}
+```
+
+---
+
+# 固定スキーマ
+
+## CardID
+
+必須
+
+一意
+
+```json
+{
+  "CardID":"DM23EX2-001"
+}
+```
+
+---
+
+## Name
+
+```json
+{
+  "Name":"ボルシャック・ドラゴン"
+}
+```
+
+---
+
+## Type
+
+Enum
+
+```text
+Creature
+Spell
+CrossGear
+PsychicCreature
+Dragheart
+GRCreature
+TamashiiSeed
+Field
+OreGaAura
+```
+
+---
+
+## Civilizations
+
+配列
+
+```json
+["Fire"]
+```
+
+---
+
+多文明
+
+```json
+["Fire","Nature"]
+```
+
+---
+
+## Cost
+
+整数
+
+```json
+6
+```
+
+---
+
+制約
+
+```text
+0～999
+```
+
+---
+
+## Power
+
+クリーチャーのみ
+
+```json
+6000
+```
+
+---
+
+## Breaker
+
+```json
+2
+```
+
+---
+
+# 能力定義
+
+Effects
+
+---
+
+例
+
+```json
+{
+  "Effects":[]
+}
+```
+
+---
+
+# Trigger定義
+
+```json
+{
+  "Type":"Trigger",
+
+  "Event":"OnEnter",
+
+  "Effect":"DrawOne"
+}
+```
+
+---
+
+しかしv2ではEffect文字列は禁止。
+
+---
+
+採用
+
+DSL AST
+
+---
+
+# DSL構造
+
+例
+
+```json
+{
+  "Type":"Trigger",
+
+  "Event":"OnEnter",
+
+  "Body":{
+    "Node":"Draw",
+    "Count":1
+  }
+}
+```
+
+---
+
+# Trigger一覧
+
+```text
+OnEnter
+
+OnLeave
+
+OnDestroy
+
+OnAttack
+
+OnBlock
+
+OnSummon
+
+OnCast
+
+OnTap
+
+OnUntap
+
+OnShieldBreak
+
+OnTurnStart
+
+OnTurnEnd
+```
+
+---
+
+# Replacement定義
+
+例
+
+```json
+{
+  "Type":"Replacement",
+
+  "Event":"Destroy",
+
+  "Body":{
+    "Node":"Move",
+    "Destination":"Hand"
+  }
+}
+```
+
+---
+
+# Continuous定義
+
+例
+
+```json
+{
+  "Type":"Continuous",
+
+  "Layer":7,
+
+  "Condition":null,
+
+  "Body":{
+    "Node":"AddPower",
+    "Value":2000
+  }
+}
+```
+
+---
+
+# DSL AST
+
+禁止
+
+```json
+{
+  "Text":"カードを1枚引く"
+}
+```
+
+---
+
+採用
+
+```json
+{
+  "Node":"Draw",
+
+  "Count":1
+}
+```
+
+---
+
+# DSLノード一覧
+
+## Sequence
+
+```json
+{
+  "Node":"Sequence",
+
+  "Children":[]
+}
+```
+
+---
+
+## If
+
+```json
+{
+  "Node":"If",
+
+  "Condition":{},
+
+  "Then":{},
+
+  "Else":{}
+}
+```
+
+---
+
+## Query
+
+```json
+{
+  "Node":"Query",
+
+  "Query":{}
+}
+```
+
+---
+
+## Select
+
+```json
+{
+  "Node":"Select",
+
+  "Count":1
+}
+```
+
+---
+
+## Destroy
+
+```json
+{
+  "Node":"Destroy"
+}
+```
+
+---
+
+## Move
+
+```json
+{
+  "Node":"Move",
+
+  "Zone":"ManaZone"
+}
+```
+
+---
+
+## Draw
+
+```json
+{
+  "Node":"Draw",
+
+  "Count":1
+}
+```
+
+---
+
+# Semantic Validator
+
+最重要。
+
+---
+
+例
+
+不正
+
+```json
+{
+  "Node":"Draw",
+
+  "Zone":"Mana"
+}
+```
+
+---
+
+DrawにZoneは存在しない。
+
+↓
+
+Reject
+
+---
+
+# Validator段階
+
+## Level1
+
+Schema Validator
+
+---
+
+JSON形式検査
+
+---
+
+## Level2
+
+Enum Validator
+
+---
+
+存在しない文明
+
+```json
+{
+ "Civilization":"Darknesss"
+}
+```
+
+Reject
+
+---
+
+## Level3
+
+AST Validator
+
+---
+
+Node構造検査
+
+---
+
+## Level4
+
+Semantic Validator
+
+---
+
+意味検査
+
+---
+
+## Level5
+
+Rule Validator
+
+---
+
+デュエマルール整合性
+
+---
+
+# Rule Validator
+
+例
+
+呪文
+
+```json
+{
+  "Type":"Spell",
+
+  "Power":5000
+}
+```
+
+Reject
+
+---
+
+例
+
+クリーチャー
+
+```json
+{
+  "Type":"Creature",
+
+  "Power":null
+}
+```
+
+Reject
+
+---
+
+# Query Validator
+
+DMQL検証
+
+---
+
+例
+
+```json
+{
+  "Field":"Cost",
+
+  "Operator":"Contains"
+}
+```
+
+Reject
+
+---
+
+CostにContains不可
+
+---
+
+# Compiler
+
+AST
+
+↓
+
+Bytecode
+
+---
+
+例
+
+```json
+{
+  "Node":"Draw",
+
+  "Count":1
+}
+```
+
+↓
+
+```text
+PUSH_INT 1
+
+DRAW
+
+END
+```
+
+---
+
+# Bytecode Validator
+
+検査
+
+```text
+スタック不足
+
+ジャンプ先不正
+
+未定義変数
+```
+
+---
+
+# Runtime Safety
+
+無限ループ防止
+
+---
+
+Loop上限
+
+```text
+10000命令
+```
+
+---
+
+超過
+
+↓
+
+Abort
+
+---
+
+# Version System
+
+重要
+
+```json
+{
+  "SchemaVersion":"1.0"
+}
+```
+
+---
+
+将来
+
+```json
+{
+  "SchemaVersion":"2.0"
+}
+```
+
+---
+
+互換性管理
+
+---
+
+# LLM出力禁止事項
+
+LLMに自由JSONを書かせない。
+
+禁止例
+
+```json
+{
+  "Effect":"相手を全部破壊"
+}
+```
+
+---
+
+必須
+
+```json
+{
+  "Node":"Destroy"
+}
+```
+
+---
+
+つまり生成フローは
+
+```text
+カード画像
+↓
+OCR
+↓
+カードテキスト
+↓
+LLM
+↓
+Effect DSL AST
+↓
+Validator
+↓
+Compiler
+↓
+Bytecode
+↓
+Card Registry
+```
+
+です。
+
+---
+
+## 私ならさらに追加するもの
+
+完全再現を目指すなら、Validatorの上にもう1層、
+
+```text
+Card Certification System (CCS)
+```
+
+を置きます。
+
+これは生成されたカード定義に対して、
+
+```text
+サンプル盤面1000件
+↓
+自動シミュレーション
+↓
+公式裁定と一致確認
+```
+
+を行う仕組みです。
+
+実際には **Validatorだけでは不十分で、「その能力が本当に意図通り動くか」を検証するテストフレームワークが必要** になります。ここまで作ると、LLMによるカード追加がかなり現実的になります。

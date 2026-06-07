@@ -1,0 +1,101 @@
+# Target Selection Specification v1.0
+
+## 基本思想
+
+ActionとTargetを分離する。
+
+---
+
+# Selector
+
+```json
+{
+  "Zone":"BattleZone",
+  "Controller":"Opponent"
+}
+```
+
+---
+
+# 利用可能条件
+
+## Zone
+
+* BattleZone
+* Hand
+* Deck
+* Graveyard
+* Mana
+* Shield
+
+---
+
+## Controller
+
+* Self
+* Opponent
+* Any
+
+---
+
+## CardType
+
+* Creature
+* Spell
+* CrossGear
+* Field
+
+---
+
+## Civilization
+
+* Fire
+* Water
+* Nature
+* Light
+* Darkness
+* Colorless
+
+---
+
+## Race
+
+```json
+{
+  "Race":"Dragon"
+}
+```
+
+---
+
+# Count
+
+```json
+{
+  "Count":1
+}
+```
+
+---
+
+# Random
+
+ランダム選択
+
+```json
+{
+  "Random":true
+}
+```
+
+---
+
+# Choose
+
+プレイヤー選択
+
+```json
+{
+  "PlayerChoice":true
+}
+```

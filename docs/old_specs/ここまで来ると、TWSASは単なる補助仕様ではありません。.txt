@@ -1,0 +1,899 @@
+ここまで来ると、TWSASは単なる補助仕様ではありません。
+
+実際には
+
+```text
+ETS（何が起きたか）
+PRS（誰が行動できるか）
+ALDS（何を宣言できるか）
+TWSAS（いつ宣言できるか）
+```
+
+を繋ぐ、ゲーム進行ルールの中枢です。
+
+デュエマ特有の
+
+* S・トリガー
+* G・ストライク
+* ニンジャ・ストライク
+* 革命チェンジ
+* 侵略
+* 侵略ZERO
+* S・バック
+* 無月の門
+* Jチェンジ
+* オレガ・オーラ装着
+* ドラグハート龍解
+* 覚醒
+* 禁断解放
+
+などを統一的に扱うために必要になります。
+
+---
+
+# Timing Window & Special Action System (TWSAS) v1.0
+
+## 目的
+
+TWSASは
+
+* 特殊行動が発生できるタイミング
+* 割り込み可能タイミング
+* 特殊召喚タイミング
+* 特殊使用タイミング
+* 同時発生した特殊行動の順序
+
+を管理する。
+
+---
+
+# TWSASの位置
+
+```text
+ETS
+↓
+Event Generated
+↓
+TWSAS
+↓
+Special Action Window
+↓
+ALDS
+↓
+CPRS
+↓
+DMVM
+```
+
+---
+
+# 基本思想
+
+通常行動は
+
+```text
+Main Phase
+↓
+召喚
+↓
+解決
+```
+
+で終わる。
+
+---
+
+しかし特殊行動は
+
+```text
+イベント発生
+↓
+割り込み窓生成
+↓
+特殊行動宣言
+↓
+解決
+↓
+元処理へ復帰
+```
+
+となる。
+
+---
+
+# Timing Window
+
+ゲーム中に生成される行動可能時間帯。
+
+---
+
+```cpp
+enum class ETimingWindow
+{
+    Main,
+
+    AttackDeclaration,
+
+    Attacking,
+
+    BlockStep,
+
+    ShieldBreak,
+
+    ShieldTrigger,
+
+    TriggerResolution,
+
+    ZoneChange,
+
+    TurnStart,
+
+    TurnEnd,
+
+    Cleanup
+};
+```
+
+---
+
+# Special Action Window
+
+特殊行動用。
+
+---
+
+```cpp
+struct FSpecialActionWindow
+{
+    WindowID;
+
+    SourceEvent;
+
+    AllowedActions[];
+
+    PriorityPlayer;
+
+    ExpireCondition;
+};
+```
+
+---
+
+# Window Generation
+
+ETSイベントから生成。
+
+---
+
+例
+
+```text
+ShieldBroken
+```
+
+発生。
+
+↓
+
+```text
+ShieldTriggerWindow
+```
+
+生成。
+
+---
+
+# Window Stack
+
+重要。
+
+---
+
+特殊行動はネストする。
+
+---
+
+例。
+
+```text
+攻撃
+
+↓
+
+シールドブレイク
+
+↓
+
+S・トリガー
+
+↓
+
+S・トリガーで攻撃停止
+
+↓
+
+元攻撃へ復帰
+```
+
+---
+
+内部。
+
+```cpp
+WindowStack[]
+```
+
+保持。
+
+---
+
+# Trigger Window
+
+誘発型。
+
+---
+
+イベント。
+
+```text
+OnAttack
+```
+
+↓
+
+窓生成。
+
+```text
+AttackWindow
+```
+
+---
+
+# Replacement Window
+
+置換用。
+
+---
+
+イベント。
+
+```text
+DestroyAttempt
+```
+
+↓
+
+置換処理。
+
+---
+
+これはプレイヤー選択を伴わない。
+
+---
+
+# Interrupt Window
+
+割り込み。
+
+---
+
+イベント。
+
+```text
+AttackDeclared
+```
+
+↓
+
+侵略可能。
+
+↓
+
+革命チェンジ可能。
+
+---
+
+# Shield Trigger Window
+
+最重要。
+
+---
+
+発生条件。
+
+```text
+ShieldBroken
+```
+
+---
+
+処理。
+
+```text
+ShieldReveal
+
+↓
+
+TriggerCheck
+
+↓
+
+WindowCreate
+```
+
+---
+
+許可行動。
+
+```cpp
+UseShieldTrigger
+```
+
+---
+
+# G-Strike Window
+
+発生条件。
+
+```text
+ShieldReveal
+```
+
+---
+
+G・ストライク確認。
+
+---
+
+窓生成。
+
+---
+
+```text
+UseGStrike
+```
+
+---
+
+# Ninja Strike Window
+
+発生条件。
+
+```text
+OpponentAttackDeclared
+```
+
+---
+
+許可。
+
+```text
+NinjaStrike
+```
+
+---
+
+# Revolution Change Window
+
+発生条件。
+
+```text
+FriendlyAttacking
+```
+
+---
+
+許可。
+
+```text
+RevolutionChange
+```
+
+---
+
+# Invasion Window
+
+発生条件。
+
+```text
+AttackingCreatureExists
+```
+
+---
+
+許可。
+
+```text
+Invasion
+```
+
+---
+
+# Invasion ZERO
+
+侵略と同じ。
+
+---
+
+条件だけ異なる。
+
+---
+
+# S-Back Window
+
+発生条件。
+
+```text
+ShieldBreak
+```
+
+---
+
+許可。
+
+```text
+SBack
+```
+
+---
+
+# J Change
+
+発生条件。
+
+```text
+AttackDeclared
+```
+
+---
+
+専用Window。
+
+---
+
+# Mugen Gate / 無月の門
+
+発生条件。
+
+```text
+SpecifiedAttack
+```
+
+---
+
+特殊召喚窓。
+
+---
+
+# Hyper Mode
+
+発生条件。
+
+```text
+MainPhase
+```
+
+---
+
+ALDS連携。
+
+---
+
+# Awaken Window
+
+重要。
+
+---
+
+イベント。
+
+```text
+AwakenConditionSatisfied
+```
+
+---
+
+自動窓生成。
+
+---
+
+選択不要。
+
+---
+
+# Forbidden Release Window
+
+重要。
+
+---
+
+イベント。
+
+```text
+SealCountZero
+```
+
+---
+
+窓生成。
+
+---
+
+強制実行。
+
+---
+
+# Dragonic Flip Window
+
+イベント。
+
+```text
+DragonicConditionMet
+```
+
+---
+
+龍解。
+
+---
+
+# Simultaneous Windows
+
+重要。
+
+---
+
+例。
+
+```text
+攻撃
+↓
+侵略可能
+↓
+革命チェンジ可能
+```
+
+---
+
+複数窓。
+
+---
+
+```cpp
+CandidateActions[]
+```
+
+生成。
+
+---
+
+# Window Priority
+
+紙DM再現。
+
+---
+
+優先順位。
+
+```text
+Mandatory
+↓
+Triggered
+↓
+Optional
+```
+
+---
+
+# Mandatory Window
+
+強制。
+
+---
+
+例。
+
+```text
+禁断解放
+
+覚醒
+
+龍解
+```
+
+---
+
+プレイヤー拒否不可。
+
+---
+
+# Optional Window
+
+任意。
+
+---
+
+例。
+
+```text
+侵略
+
+革命チェンジ
+
+ニンジャ・ストライク
+```
+
+---
+
+# Pass Handling
+
+重要。
+
+---
+
+プレイヤー。
+
+```text
+何もしない
+```
+
+選択可能。
+
+---
+
+```cpp
+PassWindow()
+```
+
+---
+
+# Window Expiration
+
+例。
+
+```text
+AttackStep終了
+```
+
+↓
+
+侵略不可。
+
+---
+
+窓消滅。
+
+---
+
+# Nested Window Resolution
+
+例。
+
+```text
+攻撃
+
+↓
+
+革命チェンジ
+
+↓
+
+出た時能力
+
+↓
+
+能力解決
+
+↓
+
+攻撃再開
+```
+
+---
+
+Window Stackで復帰。
+
+---
+
+# Window Context
+
+保持。
+
+---
+
+```cpp
+struct FWindowContext
+{
+    EventID;
+
+    SourceObject;
+
+    TargetObject;
+
+    Snapshot;
+}
+```
+
+---
+
+侵略元などを参照可能。
+
+---
+
+# DSL Integration
+
+例。
+
+```json
+{
+  "SpecialAction":
+  {
+      "Window":"AttackDeclared",
+      "Action":"Invasion"
+  }
+}
+```
+
+---
+
+# Runtime
+
+```cpp
+UTimingWindowManager
+```
+
+---
+
+責務。
+
+```cpp
+CreateWindow()
+
+ResolveWindow()
+
+CloseWindow()
+
+PushWindow()
+
+PopWindow()
+```
+
+---
+
+# CCS検証
+
+ケース1
+
+```text
+攻撃
+
+↓
+
+侵略
+```
+
+期待。
+
+```text
+AttackWindow
+
+↓
+
+InvasionWindow
+
+↓
+
+InvasionSuccess
+```
+
+---
+
+ケース2
+
+```text
+シールドブレイク
+
+↓
+
+S・トリガー
+```
+
+期待。
+
+```text
+ShieldTriggerWindow
+
+↓
+
+UseShieldTrigger
+```
+
+---
+
+ケース3
+
+```text
+封印0枚
+```
+
+期待。
+
+```text
+ForbiddenReleaseWindow
+
+↓
+
+MandatoryExecution
+```
+
+---
+
+# TWSAS v2で必要になるもの
+
+ここまでで、
+
+* ETS
+* ZTS
+* OICS
+* RRS
+* EDDS
+* IVCS
+* CPRS
+* ALDS
+* TWSAS
+
+が揃います。
+
+ただし、デュエマ完全再現の観点では、まだ一つ巨大な穴があります。
+
+それは
+
+# Multi-Step Resolution & Procedure System (MRPS)
+
+です。
+
+理由は、デュエマには
+
+```text
+シールドブレイク
+↓
+墓地へ置く
+↓
+S・トリガー確認
+↓
+使用
+↓
+残りを手札へ
+```
+
+や
+
+```text
+ガチンコ・ジャッジ
+↓
+公開
+↓
+比較
+↓
+勝敗決定
+↓
+結果適用
+```
+
+のような、単一イベントではなく「ルールで定義された複数段階の手続き」が大量に存在するからです。
+
+実際の完全再現エンジンでは、
+
+```text
+DMVM
+↓
+Primitive Actions
+↓
+MRPS
+↓
+Official Procedures
+```
+
+という層が必要になります。
+
+ここまで作ると、紙デュエマの総合ルールにかなり近いレベルでルールエンジンを形式化できます。

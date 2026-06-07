@@ -1,0 +1,883 @@
+これはデュエマ完全再現エンジンにおいて、**SBA・ETS・ZTSと並ぶコアルール層**になります。
+
+ここで重要なのは、CPRSを単なる
+
+```text
+コストを払う処理
+```
+
+として設計してはいけないことです。
+
+デュエマでは実際には
+
+```text
+使用宣言
+↓
+使用可能判定
+↓
+追加コスト
+↓
+代替コスト
+↓
+コスト軽減
+↓
+文明条件判定
+↓
+支払い方法決定
+↓
+支払い実行
+↓
+支払い完了
+↓
+召喚/詠唱
+```
+
+という巨大なシステムになっています。
+
+---
+
+# Cost Payment & Requirement System (CPRS) v1.0
+
+## 目的
+
+CPRSは
+
+* 召喚可能判定
+* 呪文詠唱可能判定
+* 能力使用可能判定
+* 文明要件判定
+* コスト軽減・増加
+* 代替コスト
+* 追加コスト
+* コスト支払い
+
+を統一管理する。
+
+---
+
+# CPRSの位置
+
+```text
+Player Action
+↓
+CPRS
+↓
+DMVM
+↓
+ETS
+↓
+PRS
+```
+
+---
+
+# 基本モデル
+
+まず、
+
+```text
+コスト
+```
+
+と
+
+```text
+条件
+```
+
+を分離する。
+
+---
+
+## Requirement
+
+実行資格。
+
+例
+
+```text
+進化元が必要
+
+相手クリーチャーがいる
+
+シールドがある
+```
+
+---
+
+## Cost
+
+支払うもの。
+
+例
+
+```text
+マナ5
+
+カード1枚捨てる
+
+クリーチャー1体破壊
+```
+
+---
+
+# Cost Object
+
+```cpp
+struct FCost
+{
+    CostID;
+
+    CostType;
+
+    Value;
+
+    Parameters;
+};
+```
+
+---
+
+# CostType
+
+---
+
+## ManaCost
+
+通常マナ。
+
+```json
+{
+  "Type":"ManaCost",
+  "Value":5
+}
+```
+
+---
+
+## DiscardCost
+
+```text
+カードを捨てる
+```
+
+---
+
+## SacrificeCost
+
+```text
+クリーチャーを生け贄
+```
+
+---
+
+## TapCost
+
+```text
+タップする
+```
+
+---
+
+## RevealCost
+
+```text
+公開する
+```
+
+---
+
+## ExileCost
+
+```text
+除外する
+```
+
+---
+
+## MultiCost
+
+複合。
+
+---
+
+例。
+
+```text
+2マナ支払い
++
+1枚捨てる
+```
+
+---
+
+# Requirement Object
+
+```cpp
+struct FRequirement
+{
+    RequirementID;
+
+    Query;
+
+    ValidationRule;
+};
+```
+
+---
+
+# Requirement Examples
+
+---
+
+## Evolution
+
+```sql
+COUNT(
+ zone == BattleZone
+ AND race == Dragon
+)>=1
+```
+
+---
+
+## Revolution
+
+```sql
+COUNT(
+ zone == ShieldZone
+)<=2
+```
+
+---
+
+## Final Revolution
+
+```sql
+COUNT(
+ zone == ShieldZone
+)==0
+```
+
+---
+
+# Civilization Requirement
+
+最重要。
+
+---
+
+紙DMの本質。
+
+---
+
+例えば
+
+```text
+火文明コスト5
+```
+
+の場合。
+
+---
+
+必要条件。
+
+```text
+支払うマナの中に
+火文明を1枚以上含む
+```
+
+---
+
+総マナ数。
+
+```text
+5枚
+```
+
+---
+
+文明条件。
+
+```text
+火文明>=1
+```
+
+---
+
+# Civilization Matrix
+
+カード。
+
+```json
+{
+  "Civilizations":
+  [
+     "Fire",
+     "Nature"
+  ]
+}
+```
+
+---
+
+必要。
+
+```text
+Fire >=1
+Nature >=1
+```
+
+---
+
+両方必要。
+
+---
+
+# Mana Payment Model
+
+マナ支払いは候補探索問題として扱う。
+
+---
+
+例。
+
+```text
+必要
+
+5マナ
+
+火1
+
+自然1
+```
+
+---
+
+マナゾーン。
+
+```text
+火
+自然
+水
+闇
+光
+```
+
+---
+
+探索。
+
+```cpp
+FindValidManaCombination()
+```
+
+---
+
+# Payment Candidate
+
+```cpp
+struct FManaPaymentCandidate
+{
+    Cards[];
+    TotalMana;
+    CivilizationFlags;
+};
+```
+
+---
+
+# Cost Modification
+
+重要。
+
+---
+
+## Cost Reduction
+
+例。
+
+```text
+ドラゴンは2少なくなる
+```
+
+---
+
+適用順。
+
+```text
+BaseCost
+↓
+Reduction
+↓
+Increase
+↓
+Floor(0)
+```
+
+---
+
+# Cost Increase
+
+例。
+
+```text
+呪文コスト+2
+```
+
+---
+
+追加。
+
+---
+
+# Alternative Cost
+
+重要。
+
+---
+
+例。
+
+```text
+ニンジャ・ストライク
+```
+
+---
+
+通常。
+
+```text
+Cost=7
+```
+
+---
+
+代替。
+
+```text
+相手攻撃時
+↓
+無料
+```
+
+---
+
+内部。
+
+```json
+{
+  "AlternativeCost":
+  {
+      "Condition":"OpponentAttack"
+  }
+}
+```
+
+---
+
+# Additional Cost
+
+例。
+
+```text
+カードを1枚捨てる
+```
+
+---
+
+追加。
+
+---
+
+```text
+ManaCost
++
+DiscardCost
+```
+
+---
+
+# Cost Payment Window
+
+フロー。
+
+---
+
+```text
+DeclareAction
+
+↓
+
+RequirementCheck
+
+↓
+
+DetermineCost
+
+↓
+
+ApplyModifiers
+
+↓
+
+GeneratePaymentOptions
+
+↓
+
+PlayerSelectPayment
+
+↓
+
+Validate
+
+↓
+
+PayCost
+
+↓
+
+ActionExecute
+```
+
+---
+
+# Payment Lock-In
+
+重要。
+
+---
+
+支払い開始後。
+
+```text
+状態固定
+```
+
+---
+
+途中で再計算しない。
+
+---
+
+# Cost Refund
+
+デュエマ基本なし。
+
+---
+
+支払い後。
+
+```text
+不成立
+```
+
+でも返還しない。
+
+---
+
+ただし裁定例外用。
+
+```cpp
+RefundPolicy
+```
+
+保持。
+
+---
+
+# Mana Selection Choice
+
+IVCS統合。
+
+---
+
+プレイヤー選択。
+
+```text
+どのマナをタップするか
+```
+
+---
+
+Choice生成。
+
+```cpp
+ChoiceType=ManaPayment
+```
+
+---
+
+# Virtual Mana
+
+将来対応。
+
+---
+
+例。
+
+```text
+このカードは全文明を持つ
+```
+
+---
+
+内部。
+
+```cpp
+CivilizationMask
+```
+
+---
+
+ビットフラグ。
+
+---
+
+# Free Cast
+
+例。
+
+```text
+コストを支払わずに唱える
+```
+
+---
+
+処理。
+
+```text
+Cost Step Skip
+```
+
+---
+
+Requirementは残る。
+
+---
+
+# Evolution Cost
+
+特殊。
+
+---
+
+進化元。
+
+```text
+Requirement
+```
+
+であり、
+
+```text
+Cost
+```
+
+ではない。
+
+---
+
+重要。
+
+---
+
+進化元を持つこと。
+
+```text
+Requirement
+```
+
+---
+
+進化元の下に置く。
+
+```text
+Action
+```
+
+---
+
+# G-NEO Evolution
+
+同様。
+
+---
+
+追加Requirement。
+
+---
+
+# Summon Restriction
+
+例。
+
+```text
+召喚できない
+```
+
+---
+
+Requirement Failure。
+
+---
+
+# Spell Restriction
+
+例。
+
+```text
+呪文を唱えられない
+```
+
+---
+
+同様。
+
+---
+
+# CPRS Runtime
+
+## URequirementManager
+
+責務。
+
+```cpp
+ValidateRequirements()
+```
+
+---
+
+## UCostManager
+
+責務。
+
+```cpp
+CalculateCost()
+```
+
+---
+
+## UPaymentManager
+
+責務。
+
+```cpp
+GeneratePaymentOptions()
+
+ValidatePayment()
+
+ExecutePayment()
+```
+
+---
+
+# CCS検証
+
+ケース。
+
+---
+
+入力。
+
+```text
+火自然5コスト
+```
+
+---
+
+マナ。
+
+```text
+火
+自然
+水
+闇
+光
+```
+
+---
+
+期待。
+
+```text
+支払い成功
+```
+
+---
+
+ケース。
+
+```text
+火自然5コスト
+```
+
+---
+
+マナ。
+
+```text
+火
+水
+闇
+光
+光
+```
+
+---
+
+期待。
+
+```text
+文明条件不成立
+```
+
+---
+
+# CPRS v2で追加すべきもの
+
+ここまででかなり完成形に近づきますが、デュエマ完全再現にはもう一段階必要です。
+
+それが
+
+# Action Legality & Declaration System (ALDS)
+
+です。
+
+なぜなら紙デュエマでは、
+
+```text
+攻撃宣言できるか
+
+召喚宣言できるか
+
+革命チェンジできるか
+
+侵略できるか
+
+S・トリガーを使えるか
+```
+
+は単なるコストや条件ではなく、
+
+**「今この瞬間に宣言してよい行動か」**
+
+という別レイヤーのルールだからです。
+
+例えば、
+
+* 召喚酔い
+* スピードアタッカー
+* マッハファイター
+* 禁断解放直後の攻撃
+* 覚醒直後の攻撃
+* 「このクリーチャーは攻撃できない」
+
+などは、CPRSではなくALDSで扱うべきです。
+
+そしてこれは、あなたが以前指摘した
+
+> 召喚後はアンタップで出るが、通常は攻撃できない
+
+というルールを正確に実装するための仕様になります。

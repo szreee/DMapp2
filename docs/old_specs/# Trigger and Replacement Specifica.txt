@@ -1,0 +1,128 @@
+# Trigger and Replacement Specification v1.0
+
+## Trigger
+
+イベント後に発生。
+
+---
+
+例
+
+```json
+{
+  "Type":"Trigger",
+  "Event":"OnEnter"
+}
+```
+
+---
+
+# Trigger一覧
+
+* OnEnter
+* OnLeave
+* OnDestroy
+* OnAttack
+* OnBlock
+* OnDraw
+* OnCast
+* OnTurnStart
+* OnTurnEnd
+
+---
+
+# 解決順
+
+イベント
+
+↓
+
+登録
+
+↓
+
+Queue追加
+
+↓
+
+解決
+
+---
+
+# Replacement
+
+イベント前に介入。
+
+---
+
+例
+
+```json
+{
+  "Type":"Replacement",
+  "Event":"OnDestroy"
+}
+```
+
+---
+
+# 置換処理
+
+```text
+Destroy
+ ↓
+Replacement
+ ↓
+MoveHand
+```
+
+---
+
+# 優先順位
+
+Replacement
+
+↓
+
+Action
+
+↓
+
+Trigger
+
+↓
+
+StateRecalculate
+
+---
+
+# ContinuousEffect
+
+常在効果
+
+```json
+{
+  "Type":"Modifier"
+}
+```
+
+---
+
+# StateBasedAction
+
+ルールによる自動処理
+
+例
+
+```text
+パワー0以下
+
+↓
+
+墓地
+```
+
+---
+
+StateBasedActionは
+Action解決後毎回実行する。

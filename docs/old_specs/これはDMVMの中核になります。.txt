@@ -1,0 +1,703 @@
+これはDMVMの中核になります。
+
+実際、デュエマのカードテキストの難しさは
+
+破壊する
+引く
+出す
+
+ではなく
+
+どれを？
+どこから？
+どんな条件の？
+
+です。
+
+例えば
+
+名前に《ボルシャック》を含む
+火のクリーチャー
+コスト5以下
+このターン出た
+進化ではない
+ドラゴンを持つ
+
+はすべて Query Language が担当します。
+
+理想的には SQL のように考えます。
+
+BattleZone
+WHERE
+ Controller = Opponent
+ AND Power <= 3000
+
+のような形です。
+# DM Query Language Specification v1.0
+
+## (DMQL)
+
+# 1. 目的
+
+DMQLは
+
+デュエル・マスターズにおける
+
+カード検索
+対象選択
+条件判定
+
+を統一的に記述するためのクエリ言語である。
+
+---
+
+# 2. 基本構造
+
+```json
+{
+  "Source":"BattleZone",
+  "Filter":[]
+}
+```
+
+---
+
+Source
+
+検索元
+
+Filter
+
+絞り込み条件
+
+---
+
+# 3. Source
+
+## Zone
+
+```json
+{
+  "Source":"BattleZone"
+}
+```
+
+---
+
+利用可能
+
+BattleZone
+
+ManaZone
+
+ShieldZone
+
+Hand
+
+Deck
+
+Graveyard
+
+Exile
+
+SuperDimension
+
+GRZone
+
+---
+
+# 4. Filter
+
+基本形
+
+```json
+{
+  "Field":"Cost",
+  "Operator":"<=",
+  "Value":5
+}
+```
+
+---
+
+# 5. 数値比較
+
+## Cost
+
+```json
+{
+  "Field":"Cost",
+  "Operator":"<=",
+  "Value":5
+}
+```
+
+---
+
+## Power
+
+```json
+{
+  "Field":"Power",
+  "Operator":">=",
+  "Value":6000
+}
+```
+
+---
+
+## BreakCount
+
+---
+
+## Level
+
+---
+
+## SealCount
+
+---
+
+## CardCount
+
+---
+
+# 6. 文字列比較
+
+## NameContains
+
+```json
+{
+  "Field":"Name",
+  "Operator":"Contains",
+  "Value":"ボルシャック"
+}
+```
+
+---
+
+## NameEquals
+
+```json
+{
+  "Field":"Name",
+  "Operator":"Equals",
+  "Value":"ボルメテウス・ホワイト・ドラゴン"
+}
+```
+
+---
+
+# 7. 文明条件
+
+## Civilization
+
+```json
+{
+  "Field":"Civilization",
+  "Operator":"Contains",
+  "Value":"Fire"
+}
+```
+
+---
+
+複数文明対応
+
+---
+
+# 8. 種族条件
+
+```json
+{
+  "Field":"Race",
+  "Operator":"Contains",
+  "Value":"Dragon"
+}
+```
+
+---
+
+複数種族対応
+
+---
+
+# 9. カードタイプ条件
+
+Creature
+
+Spell
+
+CrossGear
+
+Field
+
+GRCreature
+
+PsychicCreature
+
+Dragheart
+
+TamashiiSeed
+
+OreGaAura
+
+---
+
+例
+
+```json
+{
+  "Field":"Type",
+  "Operator":"Equals",
+  "Value":"Creature"
+}
+```
+
+---
+
+# 10. プレイヤー条件
+
+Self
+
+Opponent
+
+Any
+
+---
+
+例
+
+```json
+{
+  "Field":"Controller",
+  "Operator":"Equals",
+  "Value":"Opponent"
+}
+```
+
+---
+
+# 11. 状態条件
+
+Tapped
+
+Untapped
+
+Attackable
+
+Blockable
+
+SummoningSick
+
+Destroyed
+
+Frozen
+
+Silenced
+
+---
+
+例
+
+```json
+{
+  "Field":"Tapped",
+  "Operator":"Equals",
+  "Value":true
+}
+```
+
+---
+
+# 12. キーワード能力条件
+
+SpeedAttacker
+
+Blocker
+
+MachFighter
+
+DoubleBreaker
+
+TripleBreaker
+
+Slayer
+
+ShieldTrigger
+
+SmashBurst
+
+etc
+
+---
+
+例
+
+```json
+{
+  "Field":"Keyword",
+  "Operator":"Contains",
+  "Value":"Blocker"
+}
+```
+
+---
+
+# 13. 進化条件
+
+Evolution
+
+NotEvolution
+
+StarEvolution
+
+InfinityEvolution
+
+---
+
+例
+
+```json
+{
+  "Field":"Evolution",
+  "Operator":"Equals",
+  "Value":false
+}
+```
+
+---
+
+# 14. 所有者条件
+
+Owner
+
+Controller
+
+CurrentController
+
+OriginalOwner
+
+---
+
+# 15. ターン情報条件
+
+ThisTurnEntered
+
+ThisTurnAttacked
+
+ThisTurnDestroyed
+
+ThisTurnSummoned
+
+---
+
+例
+
+```json
+{
+  "Field":"ThisTurnEntered",
+  "Operator":"Equals",
+  "Value":true
+}
+```
+
+---
+
+# 16. イベント履歴条件
+
+LastDestroyed
+
+LastMoved
+
+LastSummoned
+
+LastAttacker
+
+LastBlocker
+
+---
+
+例
+
+```json
+{
+  "Field":"LastDestroyed",
+  "Operator":"Equals",
+  "Value":true
+}
+```
+
+---
+
+# 17. 相対参照
+
+## SourceCard
+
+効果発生源
+
+```json
+{
+  "Ref":"SourceCard"
+}
+```
+
+---
+
+## EventCard
+
+イベント対象
+
+```json
+{
+  "Ref":"EventCard"
+}
+```
+
+---
+
+## SelectedCard
+
+選択済みカード
+
+```json
+{
+  "Ref":"SelectedCard"
+}
+```
+
+---
+
+# 18. 集計条件
+
+COUNT利用
+
+---
+
+例
+
+```json
+{
+  "Aggregate":"Count",
+  "Query":{}
+}
+```
+
+---
+
+利用先
+
+COUNT_MATCH
+
+COUNT_RACE
+
+COUNT_GRAVEYARD
+
+COUNT_SHIELDS
+
+---
+
+# 19. 論理演算
+
+AND
+
+OR
+
+NOT
+
+---
+
+例
+
+```json
+{
+  "AND":[
+    {
+      "Field":"Cost",
+      "Operator":"<=",
+      "Value":5
+    },
+    {
+      "Field":"Civilization",
+      "Operator":"Contains",
+      "Value":"Fire"
+    }
+  ]
+}
+```
+
+---
+
+# 20. 並び順
+
+Top
+
+Bottom
+
+Random
+
+Newest
+
+Oldest
+
+HighestPower
+
+LowestPower
+
+HighestCost
+
+LowestCost
+
+---
+
+例
+
+```json
+{
+  "Order":"HighestPower"
+}
+```
+
+---
+
+# 21. 制限
+
+## Limit
+
+```json
+{
+  "Limit":1
+}
+```
+
+---
+
+## Offset
+
+```json
+{
+  "Offset":0
+}
+```
+
+---
+
+# 22. Query例
+
+## コスト5以下の火のクリーチャー
+
+```json
+{
+  "Source":"BattleZone",
+
+  "Filter":[
+    {
+      "Field":"Type",
+      "Operator":"Equals",
+      "Value":"Creature"
+    },
+
+    {
+      "Field":"Civilization",
+      "Operator":"Contains",
+      "Value":"Fire"
+    },
+
+    {
+      "Field":"Cost",
+      "Operator":"<=",
+      "Value":5
+    }
+  ]
+}
+```
+
+---
+
+## 名前にボルシャックを含むドラゴン
+
+```json
+{
+  "AND":[
+    {
+      "Field":"Name",
+      "Operator":"Contains",
+      "Value":"ボルシャック"
+    },
+
+    {
+      "Field":"Race",
+      "Operator":"Contains",
+      "Value":"Dragon"
+    }
+  ]
+}
+```
+
+---
+
+# 23. VM連携
+
+QUERY
+
+↓
+
+Filter適用
+
+↓
+
+CandidateList生成
+
+↓
+
+Selection命令へ渡す
+
+---
+
+# 24. 将来拡張
+
+Subtype
+
+CardGroup
+
+Series
+
+Partner
+
+Faction
+
+Abyss
+
+Mecha
+
+MagicNumber
+
+CustomTags
+
+を追加可能とする。
+v2で追加したいもの
+
+実際に全カード再現を目指すなら、DMQL v1.0でもまだ不足しています。
+
+次の v2 で追加したいのは、
+
+親子関係クエリ
+
+です。
+
+例えば
+
+このクリーチャーの進化元
+このカードの下にあるカード
+このオレガ・オーラが付いているクリーチャー
+このドラグハートを装備しているドラグナー
+
+を表現するために、
+
+{
+  "Relation":"EvolutionBase"
+}
+
+のようなリレーションクエリが必要になります。
+
+デュエマ完全再現を考えると、DMQL v2では「カード同士の関係性」を問い合わせるグラフクエリ機能が最大の追加要素になります。

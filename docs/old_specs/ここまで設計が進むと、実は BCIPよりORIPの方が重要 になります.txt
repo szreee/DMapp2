@@ -1,0 +1,697 @@
+ここまで設計が進むと、実は **BCIPよりORIPの方が重要** になります。
+
+理由は単純で、
+
+```text
+カードテキストだけでは再現できない
+```
+
+からです。
+
+デュエマには大量の
+
+* 総合ルール
+* 公式Q&A
+* 裁定変更
+* 特例裁定
+* キーワード能力解釈
+
+が存在します。
+
+例えば、
+
+```text
+「そうしたら」
+```
+
+はカードテキスト上は4文字ですが、
+
+実際には
+
+```text
+前の処理が成功した場合のみ実行
+```
+
+というルール知識が必要です。
+
+これはカードから取得できません。
+
+そのためDMVM完成形では
+
+```text
+Card Registry
++
+ORKB
+```
+
+が両輪になります。
+
+---
+
+# Official Ruling Import Pipeline Specification v1.0 (ORIP)
+
+## 1. 目的
+
+公式裁定情報を収集し、
+
+```text
+機械可読なORKB
+```
+
+へ変換する。
+
+---
+
+## 2. 対象データ
+
+### A. 総合ルール
+
+例
+
+```text
+召喚
+攻撃
+シールド
+ゾーン移動
+置換効果
+誘発効果
+勝敗判定
+```
+
+---
+
+### B. 公式Q&A
+
+例
+
+```text
+Q:
+この場合どうなりますか？
+
+A:
+○○になります。
+```
+
+---
+
+### C. 裁定変更履歴
+
+例
+
+```text
+2022年裁定
+
+↓
+
+2024年裁定
+```
+
+---
+
+### D. キーワード能力
+
+例
+
+```text
+スピードアタッカー
+
+ブロッカー
+
+マッハファイター
+
+ジャストダイバー
+```
+
+---
+
+### E. カード固有FAQ
+
+例
+
+```text
+カードA
+カードB
+```
+
+の特殊裁定。
+
+---
+
+## 3. システム構成
+
+```text
+ORIP
+
+├ SourceCrawler
+├ RuleExtractor
+├ FAQExtractor
+├ RulingNormalizer
+├ SemanticParser
+├ RuleCompiler
+├ RulingValidator
+├ ORKBImporter
+└ VersionTracker
+```
+
+---
+
+## 4. データ取得
+
+### SourceCrawler
+
+取得対象
+
+```text
+総合ルール
+
+Q&A
+
+FAQ
+
+裁定変更
+```
+
+---
+
+出力
+
+```json
+{
+  "SourceURL":"",
+  "RawText":"..."
+}
+```
+
+---
+
+## 5. Rule Extractor
+
+総合ルール抽出。
+
+---
+
+例
+
+入力
+
+```text
+クリーチャーのパワーが0以下なら破壊される
+```
+
+出力
+
+```json
+{
+  "RuleType":"SBA",
+  "Condition":"Power<=0",
+  "Action":"Destroy"
+}
+```
+
+---
+
+## 6. FAQ Extractor
+
+Q&A分離。
+
+---
+
+入力
+
+```text
+Q:
+〜
+
+A:
+〜
+```
+
+---
+
+出力
+
+```json
+{
+  "Question":"",
+  "Answer":""
+}
+```
+
+---
+
+## 7. Semantic Parser
+
+最重要。
+
+---
+
+自然言語
+
+↓
+
+意味表現
+
+---
+
+例
+
+```text
+そうしたら
+```
+
+↓
+
+```json
+{
+  "Semantic":"IfSucceeded"
+}
+```
+
+---
+
+例
+
+```text
+かわりに
+```
+
+↓
+
+```json
+{
+  "Semantic":"Replacement"
+}
+```
+
+---
+
+## 8. Rule Compiler
+
+意味情報
+
+↓
+
+ORKBルール
+
+---
+
+例
+
+```json
+{
+  "RuleID":"CR-REPLACEMENT-001",
+
+  "Condition":"Destroy",
+
+  "Result":"NotDestroyed"
+}
+```
+
+---
+
+## 9. Ruling Validator
+
+矛盾検出。
+
+---
+
+例
+
+```text
+旧裁定
+
+↓
+
+新裁定
+```
+
+---
+
+競合記録。
+
+---
+
+## 10. Version Tracker
+
+重要。
+
+---
+
+```json
+{
+  "RuleID":"CR-901",
+
+  "Version":"2026.01"
+}
+```
+
+---
+
+裁定変更を保持。
+
+---
+
+## 11. ORKB内部構造
+
+### Rule Entry
+
+```json
+{
+  "RuleID":"CR-901",
+
+  "Category":"Replacement",
+
+  "Conditions":[],
+
+  "Conclusions":[],
+
+  "Priority":100
+}
+```
+
+---
+
+### FAQ Entry
+
+```json
+{
+  "FAQID":"FAQ-1234",
+
+  "Question":"",
+
+  "Answer":"",
+
+  "ReferencedRules":[]
+}
+```
+
+---
+
+### Ruling Entry
+
+```json
+{
+  "RulingID":"R-001",
+
+  "CardID":"DM23RP1-001",
+
+  "Question":"",
+
+  "Answer":""
+}
+```
+
+---
+
+## 12. Semantic Library
+
+頻出概念を辞書化。
+
+---
+
+例
+
+```json
+{
+  "Keyword":"IfYouDo",
+
+  "Meaning":"PreviousActionSucceeded"
+}
+```
+
+---
+
+```json
+{
+  "Keyword":"Instead",
+
+  "Meaning":"Replacement"
+}
+```
+
+---
+
+```json
+{
+  "Keyword":"May",
+
+  "Meaning":"OptionalAction"
+}
+```
+
+---
+
+## 13. Ruling Pattern Library
+
+カード固有裁定を一般化。
+
+---
+
+例
+
+```text
+破壊されるかわりに
+```
+
+↓
+
+```json
+{
+  "Pattern":"DestroyReplacement",
+
+  "Result":"NotDestroyed"
+}
+```
+
+---
+
+例
+
+```text
+能力を失う
+```
+
+↓
+
+```json
+{
+  "Pattern":"LoseAbilities"
+}
+```
+
+---
+
+## 14. Rule Graph
+
+裁定依存関係。
+
+---
+
+```text
+Destroy
+↓
+Replacement
+↓
+Move
+```
+
+---
+
+グラフ管理。
+
+---
+
+## 15. Conflict Resolver
+
+競合時。
+
+---
+
+優先順位
+
+```text
+総合ルール
+
+↓
+
+公式Q&A
+
+↓
+
+公式FAQ
+
+↓
+
+一般判例
+```
+
+---
+
+## 16. Explain Engine
+
+説明生成。
+
+---
+
+例
+
+```text
+なぜ破壊されなかったのか？
+```
+
+出力
+
+```text
+CR-901適用
+
+DestroyReplacement成立
+
+MoveToHandへ変換
+```
+
+---
+
+## 17. CCS連携
+
+CCS実行時
+
+ORKB参照。
+
+---
+
+期待結果生成。
+
+---
+
+例
+
+```text
+DestroyReplacement
+```
+
+↓
+
+期待
+
+```text
+NotDestroyed
+```
+
+---
+
+## 18. Regression Testing
+
+裁定変更時。
+
+---
+
+全テスト再実行。
+
+---
+
+```text
+Rule Update
+
+↓
+
+50000 Test Cases
+
+↓
+
+Certification
+```
+
+---
+
+## 19. Confidence Score
+
+LLM抽出結果。
+
+---
+
+```json
+{
+  "Confidence":0.87
+}
+```
+
+---
+
+低い場合。
+
+```text
+Human Review
+```
+
+へ送る。
+
+---
+
+## 20. 完成形アーキテクチャ
+
+```text
+Official Rule Sources
+        ↓
+      ORIP
+        ↓
+      ORKB
+        ↓
+   Resolution Engine
+        ↓
+      DMVM
+```
+
+---
+
+# 実際の開発順序
+
+ここで現実的な話をすると、
+
+ORIPを最初からフル自動にするのはおすすめしません。
+
+まずは
+
+```text
+Phase1
+総合ルール
+
+↓
+
+Phase2
+キーワード能力
+
+↓
+
+Phase3
+重要FAQ
+
+↓
+
+Phase4
+カード固有裁定
+```
+
+の順がいいです。
+
+特にデュエマでは、
+
+```text
+スピードアタッカー
+ブロッカー
+マッハファイター
+ジャストダイバー
+革命チェンジ
+侵略
+S・トリガー
+ニンジャ・ストライク
+```
+
+のようなキーワード能力だけでも数百種類あります。
+
+なので最初のORKBは、
+
+```text
+Core Rules + Keyword Ability Database
+```
+
+として構築し、その後にカード固有裁定を積み上げる方式が、実装コストと完成度のバランスが最も良いと思います。

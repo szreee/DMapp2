@@ -1,0 +1,861 @@
+これはデュエマ完全再現において、**実はDSLやVMより先に設計してもよいレベルの重要仕様**です。
+
+なぜなら、デュエマのカードテキストのかなりの部分が
+
+```text
+選ぶ
+見てもよい
+公開する
+ランダム
+相手に見せる
+裏向きのまま
+シールドを見る
+```
+
+という、
+
+**「情報へのアクセス権」と「選択権」**
+
+で構成されているからです。
+
+---
+
+# Information Visibility & Choice Specification (IVCS) v1.0
+
+## 目的
+
+DMVMにおいて
+
+* 公開情報
+* 非公開情報
+* プレイヤー選択
+* 強制選択
+* ランダム選択
+* 公開処理
+* UIへの提示
+
+を統一的に管理する。
+
+---
+
+# IVCSの位置
+
+```text
+DMQL
+↓
+DSL
+↓
+DMVM
+↓
+IVCS
+↓
+UI
+```
+
+---
+
+# 基本思想
+
+デュエマでは
+
+```text
+カード
+```
+
+ではなく
+
+```text
+誰がそのカードを見られるか
+```
+
+が重要。
+
+---
+
+例えば
+
+```text
+相手の手札を見る
+```
+
+は
+
+```text
+手札を取得する
+```
+
+ではない。
+
+---
+
+正しくは
+
+```text
+Visibility権限を一時的に付与する
+```
+
+である。
+
+---
+
+# Visibility Model
+
+## VisibilityLevel
+
+```cpp
+enum class EVisibility
+{
+    Public,
+    OwnerOnly,
+    ControllerOnly,
+    SpecificPlayers,
+    Hidden
+};
+```
+
+---
+
+## Public
+
+全員が見える。
+
+例
+
+```text
+バトルゾーン
+墓地
+マナ
+```
+
+---
+
+## OwnerOnly
+
+所有者のみ。
+
+例
+
+```text
+手札
+山札
+```
+
+---
+
+## SpecificPlayers
+
+一時的公開。
+
+例
+
+```text
+相手の手札を見る
+```
+
+---
+
+# Zone Visibility Table
+
+| Zone             | Visibility |
+| ---------------- | ---------- |
+| BattleZone       | Public     |
+| ManaZone         | Public     |
+| Graveyard        | Public     |
+| Hand             | OwnerOnly  |
+| Deck             | OwnerOnly  |
+| Shield           | OwnerOnly  |
+| GRZone           | OwnerOnly  |
+| SuperDimensional | OwnerOnly  |
+
+---
+
+# Information Token
+
+公開権限。
+
+```cpp
+struct FVisibilityToken
+{
+    ViewerPlayerID;
+    TargetZone;
+    ExpireCondition;
+};
+```
+
+---
+
+例。
+
+```text
+相手の手札を見る
+```
+
+↓
+
+```cpp
+Token{
+ Viewer=PlayerA
+ Zone=Hand(PlayerB)
+}
+```
+
+---
+
+# Choice System
+
+本仕様の中核。
+
+---
+
+デュエマの
+
+```text
+選ぶ
+選ばせる
+ランダム
+好きな順番
+```
+
+を統一管理。
+
+---
+
+# Choice Request
+
+```cpp
+struct FChoiceRequest
+{
+    ChoiceID;
+
+    RequestingEffect;
+
+    RequestingPlayer;
+
+    CandidateSet;
+
+    MinChoice;
+
+    MaxChoice;
+
+    Mode;
+};
+```
+
+---
+
+# Choice Mode
+
+---
+
+## Mandatory
+
+必須選択。
+
+例
+
+```text
+クリーチャーを1体選ぶ
+```
+
+---
+
+## Optional
+
+任意。
+
+例
+
+```text
+選んでもよい
+```
+
+---
+
+## UpTo
+
+最大N枚。
+
+例
+
+```text
+3枚まで選ぶ
+```
+
+---
+
+## Exactly
+
+ちょうどN枚。
+
+例
+
+```text
+2体選ぶ
+```
+
+---
+
+# Candidate Set
+
+DMQLで生成。
+
+---
+
+例。
+
+```sql
+zone == BattleZone
+AND
+type == Creature
+```
+
+---
+
+結果。
+
+```cpp
+Candidates[]
+```
+
+---
+
+# Choice Resolution
+
+---
+
+```text
+Generate Candidates
+
+↓
+
+Apply Visibility
+
+↓
+
+Present UI
+
+↓
+
+Player Choice
+
+↓
+
+Validate
+
+↓
+
+Return Result
+```
+
+---
+
+# Random Choice
+
+重要。
+
+---
+
+紙DM。
+
+```text
+ランダムに選ぶ
+```
+
+---
+
+内部。
+
+```cpp
+RandomSelect(
+    Candidates,
+    Seed
+)
+```
+
+---
+
+サーバーのみ実行。
+
+---
+
+# Deterministic RNG
+
+推奨。
+
+---
+
+```cpp
+MatchSeed
+```
+
+保持。
+
+---
+
+リプレイ可能。
+
+---
+
+# Hidden Candidate Selection
+
+重要。
+
+---
+
+例。
+
+```text
+相手の手札を見ないで
+1枚選ぶ
+```
+
+---
+
+プレイヤーは
+
+```text
+Card情報
+```
+
+を取得できない。
+
+---
+
+候補。
+
+```cpp
+CardUIDのみ
+```
+
+表示。
+
+---
+
+# Reveal Operation
+
+公開処理。
+
+---
+
+```cpp
+Reveal(
+   Cards,
+   Viewers,
+   Duration
+)
+```
+
+---
+
+例。
+
+```text
+山札の上を公開する
+```
+
+---
+
+# Reveal Duration
+
+---
+
+## Instant
+
+一瞬。
+
+---
+
+## UntilResolution
+
+解決まで。
+
+---
+
+## Permanent
+
+永続公開。
+
+---
+
+# Search Operation
+
+重要。
+
+---
+
+例。
+
+```text
+山札からドラゴンを探す
+```
+
+---
+
+手順。
+
+```text
+Grant Visibility
+
+↓
+
+Search
+
+↓
+
+Select
+
+↓
+
+Remove Visibility
+```
+
+---
+
+# Look Operation
+
+別扱い。
+
+---
+
+例。
+
+```text
+山札の上3枚を見る
+```
+
+---
+
+公開ではない。
+
+---
+
+```text
+Viewerのみ可視
+```
+
+---
+
+# Reveal vs Look
+
+重要。
+
+---
+
+Reveal
+
+```text
+全員見える
+```
+
+---
+
+Look
+
+```text
+指定プレイヤーのみ
+```
+
+---
+
+# Secret Information Tracking
+
+監査用。
+
+---
+
+```cpp
+InformationAccessLog
+```
+
+---
+
+保存。
+
+```text
+誰が
+
+何を
+
+いつ見たか
+```
+
+---
+
+# Choice Scope
+
+---
+
+## Self
+
+自分選択。
+
+---
+
+## Opponent
+
+相手選択。
+
+---
+
+## Controller
+
+コントローラ。
+
+---
+
+## Owner
+
+所有者。
+
+---
+
+## System
+
+ランダム。
+
+---
+
+# Simultaneous Choice
+
+重要。
+
+---
+
+例。
+
+```text
+お互い1枚選ぶ
+```
+
+---
+
+内部。
+
+```cpp
+PendingChoices[]
+```
+
+---
+
+全回答後。
+
+```text
+Reveal
+```
+
+---
+
+# Ordered Choice
+
+例。
+
+```text
+好きな順番で山札の下へ
+```
+
+---
+
+追加。
+
+```cpp
+OrderingChoice
+```
+
+---
+
+# Split Choice
+
+例。
+
+```text
+2枚選び
+1枚捨て
+1枚手札
+```
+
+---
+
+グループ選択。
+
+---
+
+# Choice References
+
+RRS統合。
+
+---
+
+例。
+
+```text
+選んだクリーチャー
+```
+
+↓
+
+```cpp
+ChoiceResultRef
+```
+
+---
+
+後続DSL参照。
+
+---
+
+# Visibility Dependencies
+
+EDDS統合。
+
+---
+
+例。
+
+```text
+ターン終了まで公開
+```
+
+---
+
+Duration。
+
+```cpp
+UntilTurnEnd
+```
+
+---
+
+# IVCS Runtime Manager
+
+実装。
+
+```cpp
+UVisibilityManager
+```
+
+---
+
+責務。
+
+```cpp
+GrantVisibility()
+
+RevokeVisibility()
+
+CanSee()
+
+Reveal()
+```
+
+---
+
+```cpp
+UChoiceManager
+```
+
+---
+
+責務。
+
+```cpp
+CreateChoice()
+
+ValidateChoice()
+
+ResolveChoice()
+```
+
+---
+
+# CCSテスト
+
+例。
+
+---
+
+入力。
+
+```text
+相手の手札を見て
+1枚選ぶ
+```
+
+---
+
+期待。
+
+```text
+Visibility Granted
+
+↓
+
+Choice Generated
+
+↓
+
+Card Selected
+
+↓
+
+Visibility Revoked
+```
+
+---
+
+# デュエマ完全再現に向けて次に必要なもの
+
+ここまでで、
+
+* PCS
+* ETS
+* ZTS
+* OICS
+* RRS
+* EDDS
+* IVCS
+
+が揃いました。
+
+しかし、まだ巨大な欠落があります。
+
+それは
+
+```text
+コスト支払い
+文明判定
+召喚条件
+進化条件
+使用宣言
+```
+
+です。
+
+例えばユーザーが以前指摘した、
+
+> マナは好きにタップできるが、使用する文明を含まなければならない
+
+というルールは、実は単なる効果ではなくゲームの根幹ルールです。
+
+そのため次に設計すべきは
+
+# Cost Payment & Requirement System (CPRS)
+
+です。
+
+これは
+
+```text
+召喚できるか
+
+唱えられるか
+
+進化できるか
+
+文明条件を満たすか
+
+代替コストを払えるか
+```
+
+を定義する仕様になります。
+
+デュエマ完全再現では、CPRSはDMVMの「ルール憲法」の一部になります。

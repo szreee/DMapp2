@@ -1,0 +1,411 @@
+ここが実はプロジェクト全体で一番重要な部分です。
+
+v4のRuleEngineはかなり良いですが、現状のDSLでは有名なデュエマカードの多くが表現できません。
+
+例えば
+
+ボルメテウス・ホワイト・ドラゴン
+↓
+シールドを墓地に置く
+
+は書けます。
+
+しかし
+
+蒼き団長 ドギラゴン剣
+
+革命チェンジ
+
+攻撃時
+
+火または自然のコスト5以下を出す
+
+そうしたら...
+
+
+になると破綻します。
+
+現在のDSLの問題
+
+今は
+
+{
+  "Type":"Trigger",
+  "Event":"OnAttack",
+  "Actions":[]
+}
+
+程度。
+
+しかしデュエマには
+
+そうしたら
+その後
+そのターン
+可能なら
+してもよい
+選ばなければ
+かわりに
+～するたび
+このターンは
+次の自分のターンのはじめまで
+
+が大量にある。
+
+つまり
+
+Action列
+
+Action
+Action
+Action
+
+では足りない。
+
+v2で目指すもの
+
+Effect DSL v2
+
+カードテキスト
+↓
+AST
+↓
+Effect VM
+
+へ進化。
+
+AST構造
+
+LLMはまず
+
+{
+ "NodeType":"Trigger"
+}
+
+みたいな木構造を生成する。
+
+例
+
+相手クリーチャーを1体破壊する。
+そうしたらカードを1枚引く。
+
+DSL
+
+{
+  "NodeType":"Sequence",
+
+  "Steps":[
+
+    {
+      "NodeType":"Destroy",
+      "Target":"Selected"
+    },
+
+    {
+      "NodeType":"IfSucceeded",
+
+      "Actions":[
+        {
+          "NodeType":"Draw",
+          "Count":1
+        }
+      ]
+    }
+  ]
+}
+Node種類
+Sequence
+
+順番実行
+
+{
+ "NodeType":"Sequence",
+ "Steps":[]
+}
+
+対応
+
+その後
+そうしたら
+次に
+Conditional
+
+条件分岐
+
+{
+ "NodeType":"If",
+ "Condition":{},
+ "Then":[]
+}
+
+対応
+
+もし
+なら
+そうした場合
+Optional
+
+任意実行
+
+{
+ "NodeType":"Optional",
+ "Actions":[]
+}
+
+対応
+
+してもよい
+してもよい。その場合
+Choice
+
+選択肢
+
+{
+ "NodeType":"Choice",
+
+ "Options":[]
+}
+
+対応
+
+いずれかを選ぶ
+
+どちらか1つ
+Repeat
+
+繰り返し
+
+{
+ "NodeType":"Repeat",
+
+ "Count":3,
+
+ "Actions":[]
+}
+
+対応
+
+3回
+その数だけ
+Query System
+
+ここが重要。
+
+カード選択条件。
+
+例えば
+
+コスト5以下のドラゴン
+
+DSL
+
+{
+ "Type":"CardQuery",
+
+ "Conditions":[
+   {
+     "Field":"Cost",
+     "Operator":"<=",
+     "Value":5
+   },
+
+   {
+     "Field":"Race",
+     "Operator":"Contains",
+     "Value":"Dragon"
+   }
+ ]
+}
+Context Variables
+
+デュエマには
+
+このターン
+
+最後に破壊された
+
+選んだカード
+
+そのクリーチャー
+
+がある。
+
+だから
+
+Contextを持つ。
+
+例
+
+{
+ "NodeType":"Store",
+
+ "Variable":"DestroyedCard"
+}
+
+後続
+
+{
+ "NodeType":"Move",
+
+ "Target":"$DestroyedCard"
+}
+Event Binding
+
+現在
+
+{
+ "Event":"OnEnter"
+}
+
+だけ。
+
+v2
+
+{
+ "Event":"CardMoved",
+
+ "Conditions":[]
+}
+
+例
+
+{
+ "Event":"CardMoved",
+
+ "Conditions":[
+   {
+     "ToZone":"BattleZone"
+   }
+ ]
+}
+
+これで
+
+出た時
+
+出された時
+
+離れた時
+
+全部表現できる。
+
+Replacement DSL
+
+最重要。
+
+現状
+
+{
+ "Event":"OnDestroy"
+}
+
+だけ。
+
+v2
+
+{
+ "NodeType":"Replacement",
+
+ "Match":
+ {
+   "Action":"Destroy"
+ },
+
+ "Replace":
+ {
+   "Action":"Move",
+   "Destination":"Hand"
+ }
+}
+
+つまり
+
+イベントではなく
+
+Action変換。
+
+Duration System
+
+デュエマ最大の難所。
+
+例
+
+このターン
+次のターンのはじめまで
+ゲーム中
+
+DSL
+
+{
+ "Duration":
+ {
+   "Type":"UntilEndOfTurn"
+ }
+}
+
+種類
+
+EndOfTurn
+NextTurnStart
+NextTurnEnd
+Permanent
+最終形
+
+有名なカードでも表現可能になる。
+
+例
+
+相手クリーチャーを1体破壊する。
+そうしたらカードを1枚引く。
+
+↓
+
+{
+ "NodeType":"Sequence",
+
+ "Steps":[
+
+   {
+     "NodeType":"Destroy",
+     "Selector":"OpponentCreature"
+   },
+
+   {
+     "NodeType":"IfSucceeded",
+
+     "Actions":[
+       {
+         "NodeType":"Draw",
+         "Count":1
+       }
+     ]
+   }
+ ]
+}
+私ならさらに変更する
+
+実は JSON DSL ではなく
+
+Card Text
+↓
+LLM
+↓
+AST(JSON)
+↓
+Validator
+↓
+Bytecode
+↓
+Effect VM
+
+にします。
+
+つまりDSL v2は最終形ではなく、
+
+AST仕様書
+
+として設計する。
+
+そうするとLLMが生成したJSONを検証し、内部では高速なバイトコードへコンパイルできます。
+
+デュエマ全カード再現を本気で目指すなら、次は Effect VM命令セット仕様書（Bytecode仕様） を設計する段階です。そこまで行くと、実質的に「デュエマ専用スクリプト言語」を作ることになります。

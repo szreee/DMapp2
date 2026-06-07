@@ -1,0 +1,487 @@
+DM Online Platform Specification (DMOPS) v1.0
+目的
+
+DMVMを利用した
+
+紙デュエマ完全再現オンラインゲーム
+
+を実現する。
+
+システム全体
++-------------------------+
+|        UE5 Client       |
++-------------------------+
+
+          RPC
+
++-------------------------+
+|      Match Server       |
++-------------------------+
+
+          |
+
++-------------------------+
+|          DMVM           |
++-------------------------+
+
+          |
+
++-------------------------+
+| Card DB / ORKB / CCS    |
++-------------------------+
+モジュール構成
+DMOPS
+
+├ Matchmaking
+├ RoomSystem
+├ OnlineBattle
+├ OfflineBattle
+├ DeckBuilder
+├ Collection
+├ UserProfile
+├ Replay
+├ Settings
+├ CardDatabase
+├ AI System
+├ SaveData
+1. ユーザーシステム仕様
+UserProfile
+
+保存情報
+
+struct FUserProfile
+{
+    FString UserID;
+
+    FString UserName;
+
+    int32 Level;
+
+    int32 TotalWins;
+
+    int32 TotalLosses;
+
+    TArray<FDeckID> Decks;
+
+    TArray<FCardID> OwnedCards;
+
+    FSettingsData Settings;
+};
+保存方法
+
+ローカル版
+
+SaveGame
+
+利用
+
+オンライン版
+
+Backend API
+
+利用
+
+2. デッキシステム仕様
+Deck
+struct FDeckData
+{
+    FString DeckName;
+
+    TArray<int32> MainDeck;
+
+    FString SleeveID;
+
+    FString IconID;
+};
+制約
+
+デュエマ準拠
+
+40枚以上
+
+同名4枚まで
+
+超GR
+
+超次元
+
+零龍
+
+対応
+
+Deck Validator
+
+保存前に検証
+
+bool ValidateDeck(FDeckData Deck);
+3. カード検索システム
+
+重要。
+
+ユーザー体験を左右する。
+
+Filter Engine
+
+条件
+
+文明
+
+種族
+
+コスト
+
+パワー
+
+カードタイプ
+
+レアリティ
+
+能力
+
+発売弾
+
+名前
+
+例
+
+火文明
+
+ドラゴン
+
+コスト7以上
+
+DMQL利用
+
+SELECT Card
+WHERE Civilization=Fire
+AND Race=Dragon
+AND Cost>=7
+Full Text Search
+
+例
+
+ボルシャック
+
+検索
+
+前方一致
+
+部分一致
+
+かな検索
+
+対応
+
+4. コレクション管理
+Collection Manager
+OwnedCards
+
+管理
+
+表示
+
+所持
+
+未所持
+
+枚数
+
+フィルター連携
+
+5. オンライン対戦仕様
+Matchmaking
+
+モード
+
+ランク
+
+カジュアル
+
+フレンド
+マッチデータ
+struct FMatchInfo
+{
+    FString MatchID;
+
+    FString PlayerA;
+
+    FString PlayerB;
+
+    EMatchType Type;
+};
+Dedicated Server
+
+推奨
+
+クライアント
+↓
+サーバー
+↓
+DMVM
+
+ルール処理
+
+完全サーバー側
+
+6. ルームシステム
+
+重要
+
+Room
+struct FRoomData
+{
+    FString RoomID;
+
+    FString Password;
+
+    FString HostPlayer;
+
+    int32 SpectatorCount;
+};
+
+機能
+
+ルーム作成
+
+ルーム検索
+
+パスワード
+
+観戦
+フレンド招待
+
+RPC
+
+InvitePlayer()
+7. オフラインCPU対戦
+AI Controller
+UDMDeckAI
+
+難易度
+
+Easy
+
+Normal
+
+Hard
+
+Expert
+AI層
+Action Generator
+↓
+Board Evaluator
+↓
+Decision Tree
+Easy
+
+ランダム
+
+Normal
+
+簡易評価
+
+Hard
+
+探索あり
+
+Expert
+
+将来的にLLMやMCTS
+
+8. 対戦UI
+フィールド
+デッキ
+
+手札
+
+マナ
+
+墓地
+
+シールド
+
+バトルゾーン
+
+超次元
+
+GR
+操作
+
+カード右クリック
+
+召喚
+
+攻撃
+
+能力確認
+スマホ対応考慮
+
+将来
+
+9. リプレイシステム
+
+重要
+
+DMVMと相性が良い
+
+保存
+
+ActionLog
+
+のみ
+
+例
+
+Turn1
+
+Summon
+
+Attack
+
+BreakShield
+
+再生
+
+ActionLog
+↓
+DMVM再実行
+10. 観戦システム
+
+Spectator
+
+USpectatorController
+
+閲覧可能
+
+公開情報のみ
+
+手札は非表示
+
+11. カードデータ管理
+
+CardDatabase
+
+UCardDatabase
+
+ロード
+
+CardJSON
+
+起動時
+
+JSON
+↓
+Validator
+↓
+CardRegistry
+12. 更新システム
+
+将来重要
+
+新弾追加
+
+JSON追加
+
+のみ
+
+再ビルド不要
+
+13. ログシステム
+
+DMVMログ
+
+FActionLog
+
+記録
+
+召喚
+
+攻撃
+
+誘発
+
+置換
+
+SBA
+
+デバッグ用
+
+14. チート対策
+
+重要
+
+クライアントは
+
+表示だけ
+
+禁止
+
+ルール判定
+
+山札順管理
+
+手札管理
+
+全て
+
+Server Authority
+15. UE5クラス構成
+UGameInstance
+ ├ UserProfileSubsystem
+ ├ DeckSubsystem
+ ├ MatchmakingSubsystem
+
+AGameMode
+ ├ OnlineBattleGameMode
+ └ OfflineBattleGameMode
+
+AGameState
+ └ ADuelGameState
+
+APlayerState
+ └ ADuelPlayerState
+
+APlayerController
+ └ ADuelPlayerController
+
+DMVM
+ ├ RuleEngine
+ ├ StateManager
+ ├ TriggerManager
+ ├ EffectManager
+v1.1で追加検討すべき機能
+
+まず最初のプレイアブル版なら、
+
+✅ オフラインCPU対戦
+✅ ルーム対戦
+✅ デッキ編集
+✅ カード検索
+✅ リプレイ
+
+までで十分です。
+
+その後、
+
+ランクマッチ
+観戦
+フレンド
+大会モード
+クラウド保存
+クロスプレイ
+
+を追加していくのが現実的です。
+
+個人的には、このプロジェクトのMVP（最初に完成させるべき最小構成）は、
+
+JSONカード
+↓
+DMVM
+↓
+オフラインCPU対戦
+↓
+デッキ編集
+
+です。
+
+オンライン対戦はその後でも遅くありません。DMVMの完成度が低い段階でネットワーク同期まで抱えると、デバッグ難易度が一気に跳ね上がります。まずはCPU対戦でルールエンジンを固めるのが最も成功率が高いです。

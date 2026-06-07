@@ -1,0 +1,776 @@
+ここから先は、**LLMで22,000枚超のカードを取り込むための本丸**です。
+
+実際には、
+
+```text
+KAFS
+=
+キーワード能力辞書
+
+ATC
+=
+自由記述能力辞書
+```
+
+です。
+
+デュエマのカードテキストを大量に分析すると、
+
+```text
+完全に固有能力
+```
+
+は意外と少なく、
+
+多くは
+
+```text
+カードを1枚引く
+
+相手のクリーチャーを1体破壊する
+
+山札の上から○枚見る
+
+墓地から回収する
+
+パワーを+○○する
+
+条件を満たしたら召喚する
+```
+
+などのテンプレートの組み合わせです。
+
+そのためATCは
+
+```text
+自然言語
+↓
+能力テンプレート
+↓
+DSL
+↓
+Bytecode
+```
+
+へ変換するための辞書になります。
+
+---
+
+# Ability Template Catalog (ATC) v1.0
+
+## 目的
+
+ATCは
+
+```text
+カード能力の構文パターン
+```
+
+を標準化する。
+
+目的は
+
+```text
+能力文
+↓
+ATCテンプレート
+↓
+DSL生成
+↓
+DMVM実行
+```
+
+を実現すること。
+
+---
+
+# 全体構造
+
+```cpp
+struct FAbilityTemplate
+{
+    TemplateID;
+
+    Name;
+
+    Category;
+
+    Parameters[];
+
+    GeneratedDSL;
+
+    GeneratedBytecode;
+};
+```
+
+---
+
+# テンプレート分類
+
+```cpp
+enum class ETemplateCategory
+{
+    Draw,
+
+    Search,
+
+    Destroy,
+
+    Bounce,
+
+    Tap,
+
+    Untap,
+
+    PowerModify,
+
+    CostModify,
+
+    MoveZone,
+
+    Summon,
+
+    Resource,
+
+    Choice,
+
+    Trigger,
+
+    Replacement,
+
+    Continuous,
+
+    Composition,
+
+    Procedure
+};
+```
+
+---
+
+# Draw系
+
+---
+
+## ATC-DRAW-001
+
+```text
+カードを1枚引く
+```
+
+DSL
+
+```json
+{
+  "Action":"Draw",
+  "Count":1
+}
+```
+
+Bytecode
+
+```text
+PUSH 1
+DRAW
+```
+
+---
+
+## ATC-DRAW-002
+
+```text
+カードを○枚引く
+```
+
+Parameter
+
+```json
+{
+  "Count":"Variable"
+}
+```
+
+---
+
+# Search系
+
+---
+
+## ATC-SEARCH-001
+
+```text
+山札から○○を探す
+```
+
+DSL
+
+```json
+{
+  "Action":"SearchDeck",
+  "Filter":"Condition"
+}
+```
+
+---
+
+例
+
+```text
+山札からドラゴンを1枚探す
+```
+
+↓
+
+```json
+{
+  "Action":"SearchDeck",
+  "Filter":{
+     "Race":"Dragon"
+  }
+}
+```
+
+---
+
+# Destroy系
+
+---
+
+## ATC-DESTROY-001
+
+```text
+クリーチャーを1体破壊する
+```
+
+DSL
+
+```json
+{
+  "Action":"Destroy",
+  "Target":"Creature"
+}
+```
+
+---
+
+## ATC-DESTROY-002
+
+```text
+パワー○○以下を破壊
+```
+
+DSL
+
+```json
+{
+  "Action":"Destroy",
+  "Filter":{
+      "Power<=":3000
+  }
+}
+```
+
+---
+
+# Bounce系
+
+---
+
+## ATC-BOUNCE-001
+
+```text
+手札に戻す
+```
+
+DSL
+
+```json
+{
+  "Action":"Move",
+  "Destination":"Hand"
+}
+```
+
+---
+
+## ATC-BOUNCE-002
+
+```text
+持ち主の手札に戻す
+```
+
+DSL
+
+```json
+{
+  "Action":"ReturnToOwnerHand"
+}
+```
+
+---
+
+# Mana系
+
+---
+
+## ATC-MANA-001
+
+```text
+マナゾーンに置く
+```
+
+DSL
+
+```json
+{
+  "Action":"Move",
+  "Destination":"Mana"
+}
+```
+
+---
+
+## ATC-MANA-002
+
+```text
+マナをアンタップする
+```
+
+DSL
+
+```json
+{
+  "Action":"Untap"
+}
+```
+
+---
+
+# Graveyard系
+
+---
+
+## ATC-GRAVE-001
+
+```text
+墓地から手札に戻す
+```
+
+DSL
+
+```json
+{
+  "Action":"Move",
+  "Source":"Graveyard",
+  "Destination":"Hand"
+}
+```
+
+---
+
+## ATC-GRAVE-002
+
+```text
+墓地から召喚する
+```
+
+DSL
+
+```json
+{
+  "Action":"SummonFromGraveyard"
+}
+```
+
+---
+
+# Summon系
+
+---
+
+## ATC-SUMMON-001
+
+```text
+コストを支払わず召喚する
+```
+
+DSL
+
+```json
+{
+  "Action":"Summon",
+  "IgnoreCost":true
+}
+```
+
+---
+
+## ATC-SUMMON-002
+
+```text
+バトルゾーンに出す
+```
+
+DSL
+
+```json
+{
+  "Action":"PutIntoBattleZone"
+}
+```
+
+---
+
+# Power系
+
+---
+
+## ATC-POWER-001
+
+```text
+パワー+○○
+```
+
+DSL
+
+```json
+{
+  "Modifier":"Power",
+  "Value":2000
+}
+```
+
+---
+
+## ATC-POWER-002
+
+```text
+パワーを倍にする
+```
+
+DSL
+
+```json
+{
+  "Modifier":"MultiplyPower",
+  "Value":2
+}
+```
+
+---
+
+# Cost系
+
+---
+
+## ATC-COST-001
+
+```text
+召喚コストを○少なくする
+```
+
+DSL
+
+```json
+{
+  "Modifier":"Cost",
+  "Value":-2
+}
+```
+
+---
+
+# Choice系
+
+---
+
+## ATC-CHOICE-001
+
+```text
+どちらか選ぶ
+```
+
+DSL
+
+```json
+{
+  "Action":"ChooseOne",
+  "Options":[]
+}
+```
+
+---
+
+## ATC-CHOICE-002
+
+```text
+好きな数選ぶ
+```
+
+DSL
+
+```json
+{
+  "Action":"ChooseAny"
+}
+```
+
+---
+
+# Trigger系
+
+---
+
+## ATC-TRIGGER-001
+
+```text
+出た時
+```
+
+DSL
+
+```json
+{
+  "Event":"EnterBattleZone"
+}
+```
+
+---
+
+## ATC-TRIGGER-002
+
+```text
+攻撃する時
+```
+
+DSL
+
+```json
+{
+  "Event":"AttackDeclared"
+}
+```
+
+---
+
+## ATC-TRIGGER-003
+
+```text
+離れる時
+```
+
+DSL
+
+```json
+{
+  "Event":"LeaveBattleZone"
+}
+```
+
+---
+
+# Conditional系
+
+---
+
+## ATC-COND-001
+
+```text
+もし○○なら
+```
+
+DSL
+
+```json
+{
+  "If":{
+      "Condition":"..."
+  }
+}
+```
+
+---
+
+## ATC-COND-002
+
+```text
+そうしたら
+```
+
+DSL
+
+```json
+{
+  "Then":[]
+}
+```
+
+---
+
+# Loop系
+
+---
+
+## ATC-LOOP-001
+
+```text
+1体につき
+```
+
+DSL
+
+```json
+{
+  "ForEach":"Target"
+}
+```
+
+---
+
+## ATC-LOOP-002
+
+```text
+好きな数まで
+```
+
+DSL
+
+```json
+{
+  "Loop":"VariableCount"
+}
+```
+
+---
+
+# Query連携
+
+ATCはDMQLを利用する。
+
+例
+
+```text
+自分のドラゴン1体
+```
+
+↓
+
+```sql
+SELECT Creature
+WHERE Controller=Self
+AND Race=Dragon
+LIMIT 1
+```
+
+---
+
+# LLM Import
+
+入力
+
+```text
+相手のパワー3000以下のクリーチャーを1体破壊する
+```
+
+↓
+
+ATC
+
+```text
+DESTROY-002
+```
+
+↓
+
+DSL
+
+```json
+{
+  "Action":"Destroy",
+  "Filter":{
+      "Power<=":3000,
+      "Controller":"Opponent"
+  }
+}
+```
+
+---
+
+# CCS統合
+
+ATCテンプレートごとに
+
+```cpp
+TemplateTestSuite
+```
+
+を持つ。
+
+例
+
+```text
+ATC-DESTROY-002
+```
+
+なら
+
+```text
+Power=2000
+→破壊
+
+Power=4000
+→破壊されない
+```
+
+を検証する。
+
+---
+
+# v2で必要になるもの
+
+ATC v1.0で扱えるのは、
+
+```text
+単文能力
+```
+
+です。
+
+しかし実際のデュエマには
+
+```text
+相手のクリーチャーを1体破壊する。
+そうしたらカードを1枚引く。
+
+〜するたび、
+〜なら、
+〜するまで、
+その後、
+かわりに、
+```
+
+のような複文・依存構文が大量にあります。
+
+そのため次は
+
+# Ability Grammar Specification (AGS)
+
+が必要になります。
+
+役割は、
+
+```text
+ATC
+=
+単語辞書
+
+AGS
+=
+文法
+```
+
+です。
+
+ATCだけでは「単文」を理解できても、「能力文全体の意味構造」を理解できません。
+
+AGSは能力文を抽象構文木（AST）へ変換するための正式文法仕様になります。

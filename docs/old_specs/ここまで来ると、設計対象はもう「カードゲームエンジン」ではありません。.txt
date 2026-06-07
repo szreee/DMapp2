@@ -1,0 +1,825 @@
+ここまで来ると、設計対象はもう「カードゲームエンジン」ではありません。
+
+実際には、
+
+```text
+DMVM
+=
+デュエマ総合ルール実行環境
+```
+
+です。
+
+そしてCRFSは、
+
+```text
+カード能力
+ではなく
+
+ゲームそのもの
+```
+
+を形式化します。
+
+---
+
+# Comprehensive Rules Formalization System (CRFS) v1.0
+
+## 目的
+
+CRFSは、
+
+紙のデュエル・マスターズの総合ルールを
+
+```text
+人間向け文章
+
+↓
+
+形式ルール
+
+↓
+
+実行可能ルール
+
+↓
+
+DMVM
+```
+
+へ変換するための仕様である。
+
+---
+
+# CRFSの位置
+
+システム全体。
+
+```text
+Official Rules
+
+↓
+
+CRFS
+
+↓
+
+Formal Rules
+
+↓
+
+Rule Engine
+
+↓
+
+DMVM
+
+↓
+
+Game State
+```
+
+---
+
+# CRFSが扱うもの
+
+カードテキスト以外。
+
+---
+
+対象。
+
+```text
+ターン構造
+
+フェーズ
+
+召喚
+
+攻撃
+
+ブロック
+
+シールドブレイク
+
+勝敗判定
+
+同時処理
+
+優先権
+
+状態ベース処理
+
+公開情報
+
+非公開情報
+
+選択処理
+
+支払い処理
+
+特殊勝利
+
+特殊敗北
+```
+
+---
+
+# Rule Categories
+
+```cpp
+enum class ERuleCategory
+{
+    TurnStructure,
+
+    ActionRule,
+
+    CombatRule,
+
+    ZoneRule,
+
+    VisibilityRule,
+
+    StateBasedRule,
+
+    WinLoseRule,
+
+    TimingRule,
+
+    ReplacementRule,
+
+    ProcedureRule
+};
+```
+
+---
+
+# Rule Object
+
+全ルールをデータ化。
+
+```cpp
+struct FFormalRule
+{
+    RuleID;
+
+    Category;
+
+    Conditions[];
+
+    Procedure[];
+
+    Priority;
+
+    Source;
+};
+```
+
+---
+
+例。
+
+```text
+CRFS-ATTACK-001
+```
+
+---
+
+# Turn Structure Rules
+
+---
+
+## CRFS-TURN-001
+
+ターン開始。
+
+```text
+アンタップ
+↓
+ドロー
+↓
+メイン
+↓
+終了
+```
+
+---
+
+形式化。
+
+```json
+{
+  "RuleID":"CRFS-TURN-001",
+
+  "Procedure":[
+    "UntapStep",
+    "DrawStep",
+    "MainStep",
+    "EndStep"
+  ]
+}
+```
+
+---
+
+# Summon Rules
+
+重要。
+
+---
+
+## CRFS-SUMMON-001
+
+召喚可能条件。
+
+```text
+メインステップ
+
+コスト支払い可能
+
+召喚禁止効果なし
+```
+
+---
+
+形式化。
+
+```json
+{
+  "Action":"Summon",
+
+  "Requirements":[
+      "MainPhase",
+      "CanPayCost",
+      "NoSummonRestriction"
+  ]
+}
+```
+
+---
+
+## CRFS-SUMMON-002
+
+召喚後状態。
+
+```text
+バトルゾーンへ出る
+
+アンタップ状態
+```
+
+---
+
+これは以前ユーザーが指摘した内容です。
+
+形式化。
+
+```json
+{
+  "Result":{
+      "Zone":"BattleZone",
+      "Tapped":false
+  }
+}
+```
+
+---
+
+# Attack Rules
+
+---
+
+## CRFS-ATTACK-001
+
+攻撃宣言条件。
+
+---
+
+条件。
+
+```text
+アンタップ
+
+攻撃可能
+
+召喚酔いではない
+```
+
+---
+
+形式化。
+
+```json
+{
+  "Requirements":[
+     "Untapped",
+     "CanAttack",
+     "NoSummoningSickness"
+  ]
+}
+```
+
+---
+
+## 攻撃例外
+
+ここが重要。
+
+---
+
+攻撃可能。
+
+```text
+スピードアタッカー
+
+進化
+
+禁断解放
+
+覚醒
+
+一部キーワード
+```
+
+---
+
+ALDSへ反映。
+
+---
+
+# Shield Break Rules
+
+---
+
+## CRFS-SHIELD-001
+
+シールドブレイク。
+
+```text
+攻撃成功
+
+↓
+
+シールド枚数決定
+
+↓
+
+持ち主が手札へ
+```
+
+---
+
+形式化。
+
+```json
+{
+  "Procedure":[
+      "DetermineBreakCount",
+      "BreakShield",
+      "MoveToHand"
+  ]
+}
+```
+
+---
+
+# Trigger Check Rules
+
+重要。
+
+---
+
+## CRFS-TRIGGER-001
+
+シールドトリガー。
+
+```text
+シールドが手札へ加わった時
+```
+
+---
+
+特殊アクション生成。
+
+---
+
+# Block Rules
+
+---
+
+## CRFS-BLOCK-001
+
+ブロック宣言。
+
+---
+
+条件。
+
+```text
+ブロッカー所持
+```
+
+---
+
+タイミング。
+
+```text
+AttackDeclared
+```
+
+---
+
+# Simultaneous Processing
+
+超重要。
+
+---
+
+デュエマの難所。
+
+---
+
+## CRFS-SIM-001
+
+同時発生。
+
+```text
+複数誘発
+
+↓
+
+ターンプレイヤー順
+
+↓
+
+任意順
+```
+
+---
+
+実装。
+
+MRPSと連携。
+
+---
+
+# State Based Rules
+
+SBAS統合。
+
+---
+
+## CRFS-SBA-001
+
+パワー0以下。
+
+```text
+墓地へ置く
+```
+
+---
+
+## CRFS-SBA-002
+
+進化元消失。
+
+```text
+墓地へ置く
+```
+
+---
+
+## CRFS-SBA-003
+
+禁断封印不足
+
+````
+
+専用処理。
+
+---
+
+# Win/Lose Rules
+
+---
+
+## CRFS-WIN-001
+
+シールド0。
+
+負けではない。
+
+---
+
+## CRFS-WIN-002
+
+山札0。
+
+---
+
+ドローできない。
+
+↓
+
+敗北。
+
+---
+
+## CRFS-WIN-003
+
+EX Win。
+
+---
+
+特殊勝利。
+
+---
+
+# Visibility Rules
+
+IVCS統合。
+
+---
+
+## CRFS-VIS-001
+
+公開領域。
+
+```text
+BattleZone
+
+ManaZone
+
+Graveyard
+````
+
+---
+
+## CRFS-VIS-002
+
+非公開領域。
+
+```text
+Hand
+
+Deck
+```
+
+---
+
+# Cost Rules
+
+CPRS統合。
+
+---
+
+## CRFS-COST-001
+
+文明確認。
+
+超重要。
+
+---
+
+召喚時。
+
+```text
+支払ったマナ内に
+
+要求文明を含む
+```
+
+---
+
+例。
+
+```text
+火文明カード
+```
+
+---
+
+支払い。
+
+```text
+火文明マナを最低1枚含む
+```
+
+必要。
+
+---
+
+これはユーザーが最初に指摘していた、
+
+「紙デュエマらしさ」の本質部分です。
+
+---
+
+# Choice Rules
+
+---
+
+## CRFS-CHOICE-001
+
+選択可能対象。
+
+---
+
+存在しない対象は選べない。
+
+---
+
+## CRFS-CHOICE-002
+
+可能な限り処理。
+
+---
+
+デュエマ裁定準拠。
+
+---
+
+# Information Rules
+
+---
+
+公開情報。
+
+```text
+墓地
+
+マナ
+
+枚数
+```
+
+---
+
+非公開。
+
+```text
+手札内容
+
+山札順
+```
+
+---
+
+# Procedure Rules
+
+特殊処理。
+
+---
+
+## ガチンコジャッジ
+
+```text
+RevealTop
+
+CompareCost
+
+Resolve
+```
+
+---
+
+## 覚醒
+
+```text
+CheckCondition
+
+Flip
+```
+
+---
+
+## 禁断解放
+
+```text
+RemoveSeal
+
+Release
+```
+
+---
+
+# Rule Dependency Graph
+
+重要。
+
+---
+
+```text
+Attack
+ ↓
+Block
+ ↓
+Battle
+ ↓
+ShieldBreak
+ ↓
+Trigger
+ ↓
+SBA
+```
+
+---
+
+CRFSは依存関係を管理。
+
+---
+
+# Rule Versioning
+
+デュエマは裁定変更がある。
+
+---
+
+```cpp
+RuleVersion
+```
+
+導入。
+
+---
+
+例。
+
+```text
+2020
+
+2022
+
+2024
+```
+
+---
+
+ORKB連携。
+
+---
+
+# CRFSとDMVMの関係
+
+最終形。
+
+```text
+CRFS
+=
+ゲームのルール
+
+KAFS
+=
+キーワード
+
+ATC
+=
+能力テンプレート
+
+AGS
+=
+構文
+
+SBS
+=
+意味解析
+
+DMQL
+=
+検索
+
+DSL
+=
+能力表現
+
+Bytecode
+=
+実行形式
+
+DMVM
+=
+実行機
+```
+
+---
+
+## 現実的な開発観点での提案
+
+ここまでの仕様群を全部作ると、もはやTCG研究レベルのプロジェクトになります。
+
+実装順としては、
+
+1. CRFS（基本ルール）
+2. DMVM（アクション実行）
+3. DMQL（対象検索）
+4. DSL
+5. KAFS（主要キーワード100〜200種）
+6. CCS（自動テスト）
+7. ORKB（裁定知識ベース）
+8. AGS/SBS（自然言語解析）
+9. ERCS（意味同値判定）
+
+の順が現実的です。
+
+特に **AGS・SBS・ERCSは最後でよく、最初から作る必要はありません。**
+まずはJSONでカードを定義し、DMVMで公式ルール通りに動くことを優先した方が開発成功率はかなり高いです。

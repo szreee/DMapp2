@@ -1,0 +1,850 @@
+これはデュエマ完全再現エンジンにおいて、OICSと並ぶ**最重要仕様の一つ**です。
+
+実際、デュエマは他TCGと比較して
+
+```text
+カード = オブジェクト
+```
+
+ではありません。
+
+むしろ
+
+```text
+複数カード
+↓
+1つのゲームオブジェクト
+```
+
+が頻繁に発生します。
+
+例えば
+
+* 進化クリーチャー
+* 超無限進化
+* 侵略
+* 革命チェンジ
+* オレガ・オーラ
+* クロスギア
+* ドラグハート装備
+* タマシード
+* フィールド
+* 禁断＋封印
+
+はすべて「複合オブジェクト」です。
+
+そのためDMVMでは
+
+# Object Composition System (OCS) v1.0
+
+を独立仕様として定義するべきです。
+
+---
+
+# 1. 目的
+
+OCSは
+
+* 複数カードによる単一オブジェクト形成
+* 構成要素管理
+* 上下関係管理
+* 効果継承
+* 離脱処理
+* 分離処理
+
+を管理する。
+
+---
+
+# 2. OCSの位置
+
+```text
+Card
+↓
+OICS
+↓
+OCS
+↓
+StateManager
+↓
+DMVM
+```
+
+---
+
+OICSとの役割分離。
+
+---
+
+OICS
+
+```text
+これは誰か
+```
+
+---
+
+OCS
+
+```text
+何で構成されているか
+```
+
+---
+
+# 3. 基本概念
+
+---
+
+## Card Entity
+
+物理カード。
+
+```cpp
+CardUID
+```
+
+---
+
+例。
+
+```text
+ボルシャック
+```
+
+---
+
+## Game Object
+
+ゲーム上のオブジェクト。
+
+```cpp
+ObjectID
+```
+
+---
+
+例。
+
+```text
+進化クリーチャー
+```
+
+---
+
+## Composition
+
+構成情報。
+
+```cpp
+CompositionID
+```
+
+---
+
+---
+
+# 4. Composition Object
+
+```cpp
+struct FComposition
+{
+    CompositionID;
+
+    RootObjectID;
+
+    Components[];
+
+    CompositionType;
+}
+```
+
+---
+
+# 5. Component
+
+```cpp
+struct FComponent
+{
+    CardUID;
+
+    LayerIndex;
+
+    Role;
+}
+```
+
+---
+
+Role。
+
+```cpp
+Root
+
+EvolutionBase
+
+Aura
+
+CrossGear
+
+Seal
+
+Dragheart
+```
+
+---
+
+# 6. Composition Type
+
+---
+
+```cpp
+enum class ECompositionType
+{
+    Evolution,
+
+    InfiniteEvolution,
+
+    Invasion,
+
+    RevolutionChange,
+
+    AuraAttachment,
+
+    CrossGear,
+
+    Dragheart,
+
+    SealStack,
+
+    Custom
+};
+```
+
+---
+
+# 7. Evolution Composition
+
+基本。
+
+---
+
+紙DM。
+
+```text
+進化元
+↓
+上に進化
+```
+
+---
+
+内部。
+
+```text
+Top
+↓
+Base
+```
+
+---
+
+例。
+
+```text
+進化
+├─ボルバルザーク
+└─アーマードドラゴン
+```
+
+---
+
+# 8. Infinite Evolution
+
+重要。
+
+---
+
+超無限進化。
+
+---
+
+```text
+Top
+↓
+Base1
+↓
+Base2
+↓
+Base3
+...
+```
+
+---
+
+可変長。
+
+---
+
+```cpp
+Components[]
+```
+
+で管理。
+
+---
+
+# 9. Invasion Composition
+
+侵略。
+
+---
+
+進化の特殊形。
+
+---
+
+```text
+Attacking Creature
+↓
+侵略
+```
+
+---
+
+新Composition生成。
+
+---
+
+攻撃状態継承。
+
+---
+
+# 10. Revolution Change
+
+特殊。
+
+---
+
+紙ルール。
+
+```text
+攻撃中クリーチャー
+↓
+手札へ
+↓
+新クリーチャー
+```
+
+---
+
+進化ではない。
+
+---
+
+Composition作らない。
+
+---
+
+Object置換。
+
+---
+
+OICS連携。
+
+---
+
+# 11. Aura Composition
+
+オレガ・オーラ。
+
+---
+
+```text
+Creature
+↑
+Aura
+```
+
+---
+
+構成。
+
+```cpp
+AuraAttachment
+```
+
+---
+
+Aura離脱。
+
+↓
+
+本体残る。
+
+---
+
+# 12. Cross Gear Composition
+
+---
+
+```text
+Creature
+↑
+CrossGear
+```
+
+---
+
+複数装備可能。
+
+---
+
+```cpp
+Attachments[]
+```
+
+---
+
+# 13. Dragheart Composition
+
+---
+
+```text
+Creature
+↑
+Dragheart
+```
+
+---
+
+武器形態。
+
+---
+
+龍解時。
+
+↓
+
+分離。
+
+---
+
+# 14. Seal Stack
+
+禁断。
+
+---
+
+```text
+Forbidden
+↓
+Seal
+↓
+Seal
+↓
+Seal
+```
+
+---
+
+Composition管理。
+
+---
+
+# 15. Root Object
+
+重要。
+
+---
+
+複合体の代表。
+
+---
+
+```cpp
+RootObjectID
+```
+
+---
+
+対象指定。
+
+```text
+このクリーチャー
+```
+
+↓
+
+Root参照。
+
+---
+
+# 16. Component Query
+
+DMQL対応。
+
+---
+
+例。
+
+```sql
+COMPONENT_COUNT()
+```
+
+---
+
+```sql
+HAS_COMPONENT(Role=Seal)
+```
+
+---
+
+```sql
+TOP_CARD()
+```
+
+---
+
+```sql
+BOTTOM_CARD()
+```
+
+---
+
+# 17. Property Resolution
+
+重要。
+
+---
+
+パワー。
+
+```text
+最上段
+```
+
+参照。
+
+---
+
+文明。
+
+```text
+最上段
+```
+
+参照。
+
+---
+
+進化元枚数。
+
+```text
+全Component
+```
+
+参照。
+
+---
+
+# 18. Effect Scope
+
+例。
+
+```text
+このクリーチャー
+```
+
+---
+
+Root適用。
+
+---
+
+例。
+
+```text
+進化元
+```
+
+---
+
+Component適用。
+
+---
+
+RRS連携。
+
+---
+
+# 19. Leave Battle Zone
+
+重要。
+
+---
+
+進化。
+
+---
+
+紙DM。
+
+```text
+進化全体
+↓
+墓地
+```
+
+---
+
+処理。
+
+```cpp
+MoveComposition()
+```
+
+---
+
+一括移動。
+
+---
+
+# 20. Partial Detach
+
+例。
+
+```text
+進化元を1枚墓地へ
+```
+
+---
+
+処理。
+
+```cpp
+DetachComponent()
+```
+
+---
+
+Root維持。
+
+---
+
+# 21. Composition Snapshot
+
+OICS連携。
+
+---
+
+LKI保存。
+
+---
+
+```cpp
+CompositionSnapshot
+```
+
+---
+
+# 22. Composition Events
+
+ETS追加。
+
+---
+
+```cpp
+CompositionCreated
+
+ComponentAttached
+
+ComponentDetached
+
+CompositionDestroyed
+```
+
+---
+
+# 23. Composition DSL
+
+例。
+
+```json
+{
+  "Action":"EVOLVE",
+  "Requirements":[
+    {
+      "Race":"Dragon"
+    }
+  ]
+}
+```
+
+---
+
+# 24. VM命令追加
+
+```text
+CREATE_COMPOSITION
+
+ATTACH_COMPONENT
+
+DETACH_COMPONENT
+
+DESTROY_COMPOSITION
+
+COUNT_COMPONENTS
+
+GET_ROOT
+
+GET_COMPONENT
+```
+
+---
+
+# 25. Runtime
+
+```cpp
+UCompositionManager
+```
+
+---
+
+責務。
+
+```cpp
+CreateComposition()
+
+Attach()
+
+Detach()
+
+Destroy()
+
+MoveComposition()
+```
+
+---
+
+# 26. CCSテスト
+
+ケース。
+
+---
+
+入力。
+
+```text
+進化クリーチャー破壊
+```
+
+---
+
+期待。
+
+```text
+Root
++
+EvolutionBase
+↓
+墓地
+```
+
+---
+
+ケース。
+
+```text
+進化元1枚墓地
+```
+
+---
+
+期待。
+
+```text
+DetachComponent
+```
+
+---
+
+ケース。
+
+```text
+封印0枚
+```
+
+---
+
+期待。
+
+```text
+ForbiddenRelease
+```
+
+---
+
+# 現時点で不足している最大の仕様
+
+ここまでで
+
+* ETS
+* ZTS
+* OICS
+* RRS
+* EDDS
+* IVCS
+* CPRS
+* ALDS
+* TWSAS
+* MRPS
+* OCS
+
+が揃います。
+
+しかし、デュエマ完全再現において、実は最後の超巨大仕様がまだ残っています。
+
+それは
+
+# Keyword Ability Formalization Specification (KAFS)
+
+です。
+
+なぜなら22,000枚超のカードの大部分は、
+
+```text
+W・ブレイカー
+T・ブレイカー
+スレイヤー
+ブロッカー
+スピードアタッカー
+侵略
+革命チェンジ
+G・ストライク
+S・トリガー
+ジャストダイバー
+マッハファイター
+EXライフ
+```
+
+などのキーワード能力で構成されています。
+
+LLMがJSON化するときも、
+
+```json
+{
+  "KeywordAbilities":[
+     "SpeedAttacker",
+     "DoubleBreaker"
+  ]
+}
+```
+
+のように出力する方が圧倒的に安定します。
+
+そのためDMVM完成に向けて次は
+
+**Keyword Ability Formalization Specification (KAFS)**
+
+を定義する段階になります。これは「全キーワード能力をDSL/VMへ落とし込む辞書仕様」です。

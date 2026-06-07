@@ -1,0 +1,796 @@
+ここは「紙デュエマ完全再現」の最重要仕様です。
+
+実際、これまで作った
+
+* DMVM
+* DMQL
+* Effect DSL
+* Continuous Layer
+* SBA
+
+は「何が起きるか」を定義しています。
+
+しかし、
+
+```text
+いつ起きるのか
+どの順番で起きるのか
+```
+
+はまだ定義されていません。
+
+デュエマの難しさの大半は実はここにあります。
+
+例えば、
+
+```text
+Aが破壊された時
+Bが破壊された時
+Cが破壊された時
+```
+
+が同時に発生した場合、
+
+```text
+どれから解決する？
+```
+
+を決める必要があります。
+
+また、
+
+```text
+破壊されるかわりに手札へ戻る
+破壊されるかわりにマナへ置く
+```
+
+が同時に適用可能な場合、
+
+```text
+どちらを適用する？
+```
+
+も定義しなければなりません。
+
+---
+
+# Priority & Resolution System Specification v1.0
+
+## (PRS)
+
+---
+
+# 1. 目的
+
+PRSは以下を決定する。
+
+```text
+イベント発生順
+置換効果適用順
+誘発効果登録順
+誘発効果解決順
+同時処理順
+自動処理順
+```
+
+---
+
+# 2. 基本原則
+
+ゲームは常に
+
+```text
+Action Queue
+```
+
+によって進行する。
+
+あらゆる処理はActionとして表現される。
+
+---
+
+# 3. 解決フェーズ
+
+Action解決後、
+
+必ず以下を実行する。
+
+```text
+Replacement
+↓
+Action Execute
+↓
+Layer Update
+↓
+SBA
+↓
+AutoProcess
+↓
+Trigger Register
+↓
+Trigger Resolve
+```
+
+---
+
+# 4. 優先度レベル
+
+全イベントはPriorityを持つ。
+
+---
+
+Priority 0
+
+System
+
+---
+
+Priority 1
+
+Replacement
+
+---
+
+Priority 2
+
+Action
+
+---
+
+Priority 3
+
+SBA
+
+---
+
+Priority 4
+
+AutoProcess
+
+---
+
+Priority 5
+
+Trigger
+
+---
+
+Priority 6
+
+Delayed Trigger
+
+---
+
+Priority 7
+
+Cleanup
+
+---
+
+# 5. 同時イベント
+
+複数イベントが同時発生した場合。
+
+---
+
+例
+
+```text
+5体同時破壊
+```
+
+---
+
+イベント生成
+
+```text
+DestroyEvent x5
+```
+
+---
+
+同一タイムスタンプを持つ。
+
+---
+
+# 6. Trigger Registration
+
+同時イベントは
+
+全て登録
+
+してから解決する。
+
+---
+
+禁止
+
+```text
+登録
+↓
+解決
+↓
+登録
+```
+
+---
+
+正しい
+
+```text
+登録
+登録
+登録
+↓
+解決
+```
+
+---
+
+# 7. Trigger Group
+
+同一タイミング誘発をまとめる。
+
+---
+
+例
+
+```text
+A破壊
+
+B破壊
+
+C破壊
+```
+
+---
+
+TriggerGroup生成
+
+---
+
+```text
+GroupID = 15
+```
+
+---
+
+全誘発が同グループ。
+
+---
+
+# 8. Trigger解決順
+
+最重要。
+
+---
+
+原則
+
+ターンプレイヤー優先。
+
+---
+
+順番
+
+```text
+TurnPlayer Trigger
+
+↓
+
+NonTurnPlayer Trigger
+```
+
+---
+
+# 9. 同一プレイヤー内順
+
+同一プレイヤーの複数誘発。
+
+---
+
+紙DM準拠。
+
+---
+
+プレイヤーが選択。
+
+---
+
+```text
+Trigger A
+
+Trigger B
+
+Trigger C
+```
+
+↓
+
+順番指定
+
+↓
+
+Queue投入
+
+---
+
+# 10. Trigger Queue
+
+例
+
+```text
+A
+B
+C
+```
+
+選択
+
+↓
+
+```text
+C
+A
+B
+```
+
+---
+
+その順で積まれる。
+
+---
+
+# 11. Trigger解決中
+
+誘発の途中で新誘発。
+
+---
+
+例
+
+```text
+A解決
+
+↓
+
+B誘発
+```
+
+---
+
+処理
+
+```text
+現在解決完了
+
+↓
+
+SBA
+
+↓
+
+新規Trigger登録
+
+↓
+
+新グループ生成
+```
+
+---
+
+# 12. Replacement適用
+
+置換効果。
+
+---
+
+例
+
+```text
+破壊
+↓
+手札へ
+```
+
+---
+
+適用前に評価。
+
+---
+
+# 13. Replacement競合
+
+例
+
+```text
+破壊されるかわりに手札
+
+破壊されるかわりにマナ
+```
+
+---
+
+両方適用可能。
+
+---
+
+# 14. Replacement選択
+
+対象のコントローラーが選択。
+
+---
+
+例
+
+```text
+自分のクリーチャー
+```
+
+↓
+
+所有者が選ぶ。
+
+---
+
+# 15. Replacement適用回数
+
+同じイベントへ
+
+同じ置換効果
+
+1回のみ。
+
+---
+
+無限ループ防止。
+
+---
+
+# 16. Replacement Chain
+
+例
+
+```text
+Destroy
+
+↓
+
+MoveHand
+
+↓
+
+MoveMana
+```
+
+---
+
+置換後も再評価。
+
+---
+
+最大適用回数管理。
+
+---
+
+# 17. SBA Loop
+
+```cpp
+while(true)
+{
+  ExecuteSBA();
+
+  if(NoSBA)
+    break;
+}
+```
+
+---
+
+収束必須。
+
+---
+
+# 18. AutoProcess
+
+覚醒
+
+龍解
+
+禁断解放
+
+リンク
+
+---
+
+SBA後。
+
+---
+
+Trigger前。
+
+---
+
+# 19. Delayed Trigger
+
+例
+
+```text
+ターン終了時
+```
+
+---
+
+登録
+
+↓
+
+待機
+
+↓
+
+条件成立
+
+↓
+
+Trigger化
+
+---
+
+# 20. End Turn
+
+終了処理順。
+
+---
+
+```text
+EndTurn Trigger
+
+↓
+
+Duration削除
+
+↓
+
+Layer再計算
+
+↓
+
+Cleanup
+```
+
+---
+
+# 21. Cleanup
+
+ターン終了。
+
+---
+
+除去
+
+```text
+UntilEndOfTurn
+
+Temporary Modifier
+
+Temporary Keyword
+```
+
+---
+
+# 22. Event Timestamp
+
+全イベントに付与。
+
+---
+
+```cpp
+uint64 EventID
+```
+
+---
+
+増加のみ。
+
+---
+
+決定論保証。
+
+---
+
+# 23. Queue Ordering
+
+並び順
+
+```text
+Priority
+
+↓
+
+Timestamp
+
+↓
+
+Player Choice
+```
+
+---
+
+# 24. Deterministic Resolution
+
+同じ入力
+
+↓
+
+同じQueue
+
+↓
+
+同じ解決順
+
+↓
+
+同じ結果
+
+---
+
+リプレイ可能。
+
+---
+
+# 25. Resolution Context
+
+```cpp
+struct FResolutionContext
+{
+    EventID;
+    SourceCard;
+    TargetCards;
+    Controller;
+    Timestamp;
+}
+```
+
+---
+
+# 26. Infinite Loop Protection
+
+重要。
+
+---
+
+同一状態検出。
+
+---
+
+```text
+GameHash
+```
+
+保存。
+
+---
+
+同状態再出現。
+
+↓
+
+LoopDetected
+
+---
+
+# 27. Priority Table
+
+| Priority | Category        |
+| -------- | --------------- |
+| 0        | System          |
+| 1        | Replacement     |
+| 2        | Action          |
+| 3        | SBA             |
+| 4        | AutoProcess     |
+| 5        | Trigger         |
+| 6        | Delayed Trigger |
+| 7        | Cleanup         |
+
+---
+
+# 28. 完全実行サイクル
+
+```text
+Action
+
+↓
+
+Replacement
+
+↓
+
+Execute
+
+↓
+
+Layer Update
+
+↓
+
+SBA
+
+↓
+
+AutoProcess
+
+↓
+
+Trigger Register
+
+↓
+
+Trigger Resolve
+
+↓
+
+Delayed Trigger
+
+↓
+
+Cleanup
+
+↓
+
+Next Action
+```
+
+---
+
+# 29. DMVM統合
+
+PRSは
+
+* DMVM
+* SBA
+* Layer Engine
+* Trigger Engine
+* Replacement Engine
+
+の上位システムとして動作する。
+
+---
+
+# 30. 最終目標
+
+PRS適用後、
+
+```text
+同時破壊
+同時誘発
+覚醒
+龍解
+禁断解放
+置換競合
+無限ループ
+```
+
+を含めた紙デュエル・マスターズの解決順を再現可能とする。
+
+---
+
+## ここまで揃った時点のエンジン構成
+
+```text
+GameState
+ └ RuleEngine
+
+      ├ ActionQueue
+      ├ TriggerManager
+      ├ ReplacementManager
+      ├ StateManager
+      ├ LayerEngine
+      ├ SBAEngine
+      ├ ResolutionEngine (PRS)
+      ├ DMQL
+      ├ EffectVM
+      └ CardRegistry
+```
+
+この段階でようやく「カードデータをJSONで追加していけば、紙デュエマの大半を再現できるエンジン」のコア仕様が完成したと言えます。残る大仕事は、LLMが生成するカードJSON/DSLの厳密なスキーマと検証器（Validator）の設計です。

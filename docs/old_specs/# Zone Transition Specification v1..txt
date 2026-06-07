@@ -1,0 +1,88 @@
+# Zone Transition Specification v1.0
+
+## 基本
+
+カードは常に1つのゾーンのみ所属する。
+
+---
+
+# MoveAction
+
+```json
+{
+  "Type":"Move",
+  "Source":"BattleZone",
+  "Destination":"Graveyard"
+}
+```
+
+---
+
+# 標準移動
+
+## Destroy
+
+実体
+
+```json
+{
+  "Type":"Move",
+  "Destination":"Graveyard"
+}
+```
+
+---
+
+## Bounce
+
+```json
+{
+  "Destination":"Hand"
+}
+```
+
+---
+
+## ManaSend
+
+```json
+{
+  "Destination":"Mana"
+}
+```
+
+---
+
+## ShieldAdd
+
+```json
+{
+  "Destination":"Shield"
+}
+```
+
+---
+
+# 移動イベント
+
+発生
+
+```text
+BeforeMove
+Move
+AfterMove
+```
+
+---
+
+# Replacement
+
+Move前に介入。
+
+```text
+Destroy
+ ↓
+Replacement
+ ↓
+MoveToHand
+```

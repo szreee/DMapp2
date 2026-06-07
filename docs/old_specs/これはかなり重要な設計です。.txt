@@ -1,0 +1,384 @@
+これはかなり重要な設計です。
+
+今までの設計を整理すると、
+
+カード画像
+↓
+LLM
+↓
+Card JSON
+↓
+Effect AST(JSON)
+↓
+Validator
+↓
+Bytecode Compiler
+↓
+Effect VM
+↓
+Action Queue
+↓
+Rule Engine
+
+になります。
+
+つまり Effect VM は
+
+「デュエマ専用仮想CPU」
+
+になります。
+
+なぜBytecodeが必要か
+
+ASTを直接実行すると、
+
+{
+  "NodeType":"Sequence",
+  "Steps":[
+    ...
+  ]
+}
+
+を毎回パースする必要があります。
+
+カード能力が発動するたびに
+
+JSON解析
+↓
+ノード生成
+↓
+解釈
+
+が発生します。
+
+そこで起動時に
+
+AST
+↓
+Bytecode
+
+へコンパイルします。
+
+実行時は
+
+命令読み込み
+↓
+実行
+
+のみになります。
+
+VMアーキテクチャ
+UEffectVM
+
+ ├ Instruction Pointer(IP)
+ ├ Stack
+ ├ Context
+ ├ Variable Table
+ ├ Query Engine
+ └ Action Builder
+実行モデル
+
+例えば
+
+カードを1枚引く
+
+は
+
+AST
+
+{
+  "NodeType":"Draw",
+  "Count":1
+}
+
+↓
+
+Bytecode
+
+PUSH_INT 1
+DRAW
+END
+命令セット分類
+
+私なら命令を8系統に分けます。
+
+01 Stack
+02 Variable
+03 Query
+04 Selection
+05 Action
+06 ControlFlow
+07 Context
+08 Duration
+01 Stack命令
+
+VM内部スタック。
+
+PUSH_INT
+PUSH_INT 5
+
+↓
+
+Stack
+[5]
+PUSH_BOOL
+PUSH_BOOL TRUE
+PUSH_STRING
+PUSH_STRING "Dragon"
+POP
+POP
+DUP
+DUP
+02 Variable命令
+
+変数管理。
+
+STORE
+STORE TargetCard
+LOAD
+LOAD TargetCard
+
+例
+
+選んだクリーチャー
+↓
+後で参照
+03 Query命令
+
+デュエマで最重要。
+
+QUERY
+QUERY
+
+引数
+
+{
+  "Zone":"BattleZone",
+  "Controller":"Opponent"
+}
+
+結果
+
+CandidateList
+
+生成。
+
+FILTER_COST_LE
+FILTER_COST_LE 5
+FILTER_RACE
+FILTER_RACE Dragon
+FILTER_POWER_GE
+FILTER_POWER_GE 6000
+FILTER_NAME_CONTAINS
+FILTER_NAME_CONTAINS ボルメテウス
+04 Selection命令
+
+プレイヤー選択。
+
+SELECT_ONE
+SELECT_ONE
+
+候補から選択。
+
+SELECT_MANY
+SELECT_MANY 3
+SELECT_OPTION
+SELECT_OPTION
+
+対応
+
+どちらか選ぶ
+05 Action命令
+
+Action Queueへ投入。
+
+DRAW
+DRAW
+DESTROY
+DESTROY
+MOVE
+MOVE Graveyard
+TAP
+TAP
+UNTAP
+UNTAP
+ADD_MANA
+ADD_MANA
+SUMMON
+SUMMON
+SHIELD_BREAK
+SHIELD_BREAK
+REVEAL
+REVEAL
+06 Control Flow命令
+
+DSL v2の核心。
+
+JUMP
+JUMP Label10
+JUMP_IF_FALSE
+JUMP_IF_FALSE
+IF_SUCCEEDED
+IF_SUCCEEDED
+
+対応
+
+そうしたら
+そうした場合
+
+例
+
+Destroy
+↓
+成功
+↓
+Draw
+
+Bytecode
+
+DESTROY
+
+IF_SUCCEEDED L1
+
+JUMP L2
+
+L1:
+DRAW
+
+L2:
+END
+OPTIONAL
+OPTIONAL
+
+対応
+
+してもよい
+LOOP
+LOOP
+
+対応
+
+その数だけ
+07 Context命令
+
+デュエマ特有。
+
+GET_SOURCE
+GET_SOURCE
+
+発生源カード。
+
+GET_CONTROLLER
+GET_CONTROLLER
+GET_TARGET
+GET_TARGET
+GET_EVENT_CARD
+GET_EVENT_CARD
+
+例
+
+破壊されたクリーチャー
+08 Duration命令
+
+継続効果。
+
+APPLY_MODIFIER
+APPLY_MODIFIER
+
+引数
+
+{
+  "Power":2000
+}
+DURATION_END_TURN
+DURATION_END_TURN
+DURATION_NEXT_TURN
+DURATION_NEXT_TURN
+DURATION_PERMANENT
+DURATION_PERMANENT
+Trigger Bytecode
+
+例
+
+このクリーチャーが出た時、
+カードを1枚引く。
+
+↓
+
+TRIGGER OnEnter
+
+PUSH_INT 1
+
+DRAW
+
+END
+Replacement Bytecode
+
+例
+
+破壊されるかわりに手札に戻す
+
+↓
+
+REPLACEMENT Destroy
+
+MOVE Hand
+
+END
+実際に必要になる追加命令
+
+デュエマ完全再現を考えると、v2.0では足りません。
+
+将来的には以下が必要です。
+
+COUNT_MATCH
+
+COUNT_SHIELDS
+
+COUNT_GRAVEYARD
+
+COUNT_RACE
+
+FOR_EACH
+
+RANDOM_SELECT
+
+REVEAL_TOP
+
+SHUFFLE
+
+SEARCH_DECK
+
+ATTACH_CARD
+
+EVOLVE
+
+AWAKEN
+
+FORBIDDEN_RELEASE
+
+GR_SUMMON
+
+DRAGHEART_FLIP
+
+私なら最終的に命令数を 80〜120命令程度 に抑えます。
+
+重要なのは「カード専用命令を作らない」ことです。
+
+例えば
+
+BOLSHACK_EFFECT
+DOGIRAGON_EFFECT
+
+のような命令は絶対に作らず、
+
+QUERY
+SELECT
+MOVE
+DRAW
+DESTROY
+JUMP
+
+の組み合わせだけで全カードを表現する設計にします。
+
+そうすると、新カードが出ても JSON追加だけで対応できるエンジン になります。これはあなたが目指している「LLMがカード画像から能力を生成し、ゲームが動く」構想と非常に相性が良いです。

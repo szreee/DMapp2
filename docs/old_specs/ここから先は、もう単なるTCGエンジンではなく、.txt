@@ -1,0 +1,762 @@
+ここから先は、もう単なるTCGエンジンではなく、
+
+```text
+Rule Engine
++
+Knowledge Base
++
+Inference Engine
+```
+
+になります。
+
+実際、紙デュエマ完全再現を目指すなら ORKB は
+
+```text
+Wikipedia
+```
+
+では足りません。
+
+必要なのは
+
+```text
+Prolog
+```
+
+に近いものです。
+
+---
+
+# まず現在の問題
+
+現在のORKBは
+
+```text
+Rule
+FAQ
+Ruling
+Keyword
+```
+
+を保存できます。
+
+しかし保存しているだけです。
+
+例えば
+
+```text
+破壊されるかわりに手札へ戻る
+```
+
+という置換効果。
+
+ORKBには
+
+```json
+{
+  "Pattern":"DestroyReplacement",
+  "Result":"NotDestroyed"
+}
+```
+
+が保存されている。
+
+---
+
+しかしDMVMは
+
+```text
+Destroyされた？
+```
+
+を知りたい。
+
+---
+
+さらに
+
+```text
+破壊された時～
+```
+
+の誘発もある。
+
+---
+
+つまり推論が必要。
+
+---
+
+# ORKB Reasoner の役割
+
+入力
+
+```text
+Action
+GameState
+Rule
+Ruling
+```
+
+---
+
+出力
+
+```text
+裁定結果
+```
+
+---
+
+つまり
+
+```text
+Rule
+↓
+Reasoner
+↓
+Decision
+```
+
+である。
+
+---
+
+# ORKB Reasoner v1.0
+
+構成。
+
+```text
+ORKB
+
+├ Rule Store
+├ Semantic Store
+├ Precedent Store
+├ Ruling Store
+
+↓
+
+Reasoner
+
+├ Fact Engine
+├ Pattern Matcher
+├ Rule Evaluator
+├ Conflict Resolver
+├ Explanation Builder
+└ Decision Generator
+```
+
+---
+
+# Layer1 Fact Engine
+
+まず事実を収集。
+
+---
+
+例
+
+ゲーム状態。
+
+```json
+{
+  "Action":"Destroy",
+
+  "Target":"CreatureA"
+}
+```
+
+---
+
+Fact生成。
+
+```json
+{
+  "Fact":"AttemptDestroy",
+
+  "Target":"CreatureA"
+}
+```
+
+---
+
+これが推論入力。
+
+---
+
+# Layer2 Pattern Matcher
+
+裁定パターン検索。
+
+---
+
+入力
+
+```text
+AttemptDestroy
+```
+
+---
+
+ORKB検索。
+
+---
+
+発見。
+
+```text
+DestroyReplacement
+```
+
+---
+
+発見。
+
+```text
+OnDestroyTrigger
+```
+
+---
+
+候補収集。
+
+---
+
+# Layer3 Rule Evaluator
+
+ルール適用。
+
+---
+
+例
+
+```text
+DestroyReplacement
+```
+
+成立。
+
+---
+
+導出。
+
+```text
+Destroyed = false
+```
+
+---
+
+新Fact生成。
+
+```json
+{
+  "Fact":"NotDestroyed"
+}
+```
+
+---
+
+# Forward Chaining
+
+推奨。
+
+---
+
+理由。
+
+デュエマは
+
+```text
+A成立
+
+↓
+
+B成立
+
+↓
+
+C成立
+```
+
+が多い。
+
+---
+
+例。
+
+```text
+SealCount=0
+
+↓
+
+ForbiddenRelease
+
+↓
+
+NewCreature
+
+↓
+
+CanAttack
+```
+
+---
+
+順方向推論が向く。
+
+---
+
+# Rule形式
+
+内部。
+
+---
+
+```json
+{
+  "If":[
+      "AttemptDestroy",
+      "HasDestroyReplacement"
+  ],
+
+  "Then":[
+      "NotDestroyed"
+  ]
+}
+```
+
+---
+
+# Rule Graph
+
+依存関係。
+
+---
+
+```text
+Destroy
+
+↓
+
+Replacement
+
+↓
+
+NotDestroyed
+
+↓
+
+NoDestroyTrigger
+```
+
+---
+
+グラフ保持。
+
+---
+
+# Conflict Resolver
+
+超重要。
+
+---
+
+例。
+
+```text
+MoveToHand
+
+MoveToMana
+```
+
+両方適用可能。
+
+---
+
+解決。
+
+```text
+ControllerChooses
+```
+
+---
+
+ORKB登録。
+
+---
+
+```json
+{
+  "ConflictType":"Replacement",
+
+  "Resolution":"ControllerChooses"
+}
+```
+
+---
+
+# Priority Engine
+
+裁定優先度。
+
+---
+
+順序。
+
+```text
+Official Rule
+
+↓
+
+Official FAQ
+
+↓
+
+Card Specific Ruling
+
+↓
+
+General Pattern
+```
+
+---
+
+# Derived Facts
+
+推論結果。
+
+---
+
+例。
+
+```text
+NotDestroyed
+```
+
+から。
+
+---
+
+```text
+NoOnDestroyTrigger
+```
+
+導出。
+
+---
+
+さらに。
+
+```text
+NoLeaveBattlefieldByDestroy
+```
+
+導出。
+
+---
+
+# Explanation Builder
+
+重要。
+
+---
+
+DMVMデバッグ。
+
+---
+
+出力。
+
+```text
+CreatureAは破壊されなかった。
+
+理由:
+
+DestroyReplacement成立
+
+↓
+
+MoveToHand適用
+
+↓
+
+NotDestroyed導出
+
+↓
+
+OnDestroy不発
+```
+
+---
+
+# Decision Object
+
+最終出力。
+
+---
+
+```json
+{
+  "Decision":"MoveToHand",
+
+  "Destroyed":false,
+
+  "TriggerDestroy":false,
+
+  "AppliedRules":[]
+}
+```
+
+---
+
+# Semantic Reasoning
+
+文章意味。
+
+---
+
+例。
+
+```text
+そうしたら
+```
+
+---
+
+変換。
+
+```text
+IfSucceeded
+```
+
+---
+
+推論。
+
+```text
+PreviousActionSuccess
+```
+
+必要。
+
+---
+
+これもReasoner担当。
+
+---
+
+# Precedent Reasoning
+
+判例利用。
+
+---
+
+例。
+
+```text
+DestroyReplacement
+```
+
+裁定済。
+
+---
+
+新カード。
+
+```text
+Destroy→Deck
+```
+
+---
+
+同パターン認識。
+
+---
+
+裁定継承。
+
+---
+
+# Certainty Score
+
+将来用。
+
+---
+
+```json
+{
+  "Confidence":0.98
+}
+```
+
+---
+
+公式。
+
+1.0
+
+---
+
+LLM推論。
+
+0.7
+
+---
+
+# CCS統合
+
+理想。
+
+---
+
+CCS
+
+↓
+
+盤面生成
+
+↓
+
+Reasoner
+
+↓
+
+期待結果生成
+
+↓
+
+DMVM実行
+
+↓
+
+比較
+
+---
+
+# Runtime統合
+
+重要。
+
+---
+
+毎回Reasoner実行は禁止。
+
+---
+
+実行タイミング。
+
+```text
+新カード登録
+
+裁定生成
+
+FAQ解析
+
+CCS
+```
+
+---
+
+ゲーム中は。
+
+---
+
+```text
+ORKB推論済み結果
+```
+
+を利用。
+
+---
+
+# ORKB Reasoner v2
+
+将来的。
+
+---
+
+Rule DSL。
+
+---
+
+```json
+{
+  "Rule":
+  "IF Destroy AND Replacement THEN NotDestroyed"
+}
+```
+
+---
+
+コンパイル。
+
+---
+
+```text
+Rule Bytecode
+```
+
+化。
+
+---
+
+# 最終形
+
+完成すると。
+
+```text
+ORIP
+ ↓
+ORKB
+ ↓
+Reasoner
+ ↓
+Derived Rules
+ ↓
+CCS
+ ↓
+Certified Knowledge
+ ↓
+DMVM
+```
+
+になります。
+
+---
+
+ただし、ここで一つ設計を見直した方がいい点があります。
+
+今の構想だと
+
+```text
+DMVM
+↓
+ORKB
+↓
+Reasoner
+```
+
+となっていますが、実際のゲーム実行時に毎回Reasonerを呼ぶと重すぎます。
+
+私なら最終的に
+
+```text
+ORIP
+↓
+ORKB
+↓
+Reasoner
+↓
+Compiled Ruling Rules
+↓
+Rule Bytecode
+↓
+DMVM Runtime
+```
+
+にします。
+
+つまり **Reasonerは開発時・インポート時に使うコンパイラであり、対戦中は推論済みルールだけを実行する** 設計です。
+
+これは22,000枚超のカードと大量の裁定を扱うなら、ほぼ必須だと思います。

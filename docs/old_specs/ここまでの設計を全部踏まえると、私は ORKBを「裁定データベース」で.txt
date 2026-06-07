@@ -1,0 +1,625 @@
+ここまでの設計を全部踏まえると、私は **ORKBを「裁定データベース」ではなく「ルールOS」だと考えるべき** だと思います。
+
+なぜなら、現在の構成は
+
+```text
+Card JSON
+↓
+Effect DSL
+↓
+DMVM
+↓
+Rule Engine
+```
+
+ですが、
+
+実際の紙デュエマでは
+
+```text
+カードテキスト
++
+総合ルール
++
+キーワード能力定義
++
+公式Q&A
++
+過去裁定
++
+裁定変更履歴
+```
+
+によってゲームが動いています。
+
+つまりDMVMが本当に参照すべきものは
+
+```text
+Card JSON
++
+ORKB
+```
+
+です。
+
+---
+
+# 現在のORKB仕様の問題点
+
+前回までのORKBは
+
+```text
+Rule
+FAQ
+Ruling
+```
+
+を保存するDBでした。
+
+しかし実際には不足しています。
+
+例えば
+
+```text
+スピードアタッカー
+```
+
+という能力。
+
+カードには
+
+```text
+スピードアタッカー
+```
+
+としか書いていません。
+
+本当の意味は
+
+```text
+召喚酔いを無視する
+```
+
+です。
+
+つまりORKBは
+
+```text
+ルール
++
+意味論
+```
+
+を持たなければならない。
+
+---
+
+# ORKB v2.0
+
+私なら以下の6層構造にします。
+
+```text
+ORKB
+
+├ Core Rules
+├ Semantic Rules
+├ Keyword Library
+├ Ruling Database
+├ Precedent Engine
+└ Version History
+```
+
+---
+
+# Layer1 Core Rules
+
+総合ルール。
+
+例
+
+```text
+召喚
+攻撃
+ブロック
+シールド
+勝敗
+```
+
+---
+
+内部表現
+
+```json
+{
+  "RuleID":"CR-SUMMON-001",
+
+  "Condition":"Summon",
+
+  "Action":"MoveBattleZone",
+
+  "Priority":100
+}
+```
+
+---
+
+# Layer2 Semantic Rules
+
+最重要。
+
+カード文章の意味辞書。
+
+---
+
+例
+
+```text
+そうしたら
+```
+
+↓
+
+```json
+{
+  "Semantic":"IfSucceeded"
+}
+```
+
+---
+
+例
+
+```text
+かわりに
+```
+
+↓
+
+```json
+{
+  "Semantic":"Replacement"
+}
+```
+
+---
+
+例
+
+```text
+してもよい
+```
+
+↓
+
+```json
+{
+  "Semantic":"OptionalAction"
+}
+```
+
+---
+
+ここが無いとLLMがDSL化できない。
+
+---
+
+# Layer3 Keyword Library
+
+紙DM再現の要。
+
+---
+
+例
+
+```json
+{
+  "Keyword":"SpeedAttacker",
+
+  "Effect":
+  {
+    "IgnoreSummonSickness":true
+  }
+}
+```
+
+---
+
+例
+
+```json
+{
+  "Keyword":"Blocker",
+
+  "Effect":
+  {
+    "CanBlock":true
+  }
+}
+```
+
+---
+
+例
+
+```json
+{
+  "Keyword":"MachFighter",
+
+  "Effect":
+  {
+    "CanAttackCreatureOnly":true
+  }
+}
+```
+
+---
+
+将来的には
+
+```text
+200〜500能力
+```
+
+になる。
+
+---
+
+# Layer4 Ruling Database
+
+公式Q&A。
+
+---
+
+構造
+
+```json
+{
+  "RulingID":"R-1234",
+
+  "Question":"",
+
+  "Answer":"",
+
+  "ReferencedRules":[]
+}
+```
+
+---
+
+ここは検索用途。
+
+---
+
+# Layer5 Precedent Engine
+
+ここが面白い。
+
+---
+
+例
+
+```text
+破壊されるかわりに
+```
+
+↓
+
+```text
+DestroyReplacement
+```
+
+という抽象パターンへ変換。
+
+---
+
+内部
+
+```json
+{
+  "Pattern":"DestroyReplacement",
+
+  "Result":"NotDestroyed"
+}
+```
+
+---
+
+すると
+
+```text
+手札へ戻る
+
+マナへ置く
+
+山札へ置く
+```
+
+全部同じ裁定になる。
+
+---
+
+# Layer6 Version History
+
+裁定変更。
+
+---
+
+例
+
+```json
+{
+  "RuleID":"CR-001",
+
+  "Version":"2025.04",
+
+  "Change":"..."
+}
+```
+
+---
+
+# ORKBの本当の役割
+
+重要。
+
+実はDMVMは
+
+```text
+カード能力を解釈しない
+```
+
+です。
+
+---
+
+DMVMは
+
+```text
+Destroy
+
+Draw
+
+Move
+```
+
+しか知らない。
+
+---
+
+意味はORKB。
+
+---
+
+例えば
+
+```text
+スピードアタッカー
+```
+
+↓
+
+ORKB
+
+↓
+
+```json
+{
+ "IgnoreSummonSickness":true
+}
+```
+
+↓
+
+DMVM
+
+---
+
+つまり
+
+```text
+ORKB = 意味
+
+DMVM = 実行
+```
+
+になる。
+
+---
+
+# ORKBとLLMの関係
+
+理想構成。
+
+```text
+カード画像
+↓
+OCR
+↓
+カードテキスト
+↓
+LLM
+↓
+ORKB検索
+↓
+DSL生成
+```
+
+---
+
+禁止。
+
+```text
+カードテキスト
+↓
+LLM
+↓
+DSL
+```
+
+---
+
+理由。
+
+LLMは
+
+```text
+革命チェンジ
+
+侵略
+
+G・ストライク
+
+メクレイド
+```
+
+を正確に理解している保証がない。
+
+---
+
+ORKBを参照させる。
+
+---
+
+# ORKBとCCS
+
+ここが最終形。
+
+---
+
+CCS
+
+```text
+Test
+↓
+ORKB
+↓
+Expected Result
+↓
+DMVM実行
+↓
+比較
+```
+
+---
+
+つまり期待値生成器になる。
+
+---
+
+# ORKB v3.0で追加したいもの
+
+私は将来的に
+
+```text
+Rule Reasoner
+```
+
+を追加する。
+
+構造。
+
+```text
+ORKB
+
+↓
+
+Reasoner
+
+↓
+
+裁定導出
+```
+
+---
+
+例。
+
+入力
+
+```text
+破壊されるかわりに手札へ戻る
+```
+
+---
+
+Reasoner
+
+```text
+DestroyReplacement
+
+↓
+
+NotDestroyed
+
+↓
+
+OnDestroy不発
+```
+
+---
+
+結果。
+
+```json
+{
+ "Destroyed":false,
+ "TriggerDestroy":false
+}
+```
+
+---
+
+# 最終的な完成形
+
+設計全体をまとめると、
+
+```text
+BCIP
+ ↓
+Card Registry
+
+ORIP
+ ↓
+ORKB
+
+Card Registry
++
+ORKB
+ ↓
+
+DSL Compiler
+ ↓
+
+DMVM
+ ↓
+
+PRS
+ ↓
+
+SBA
+ ↓
+
+CELS
+ ↓
+
+CCS
+```
+
+になります。
+
+そして紙デュエマ完全再現を目指すなら、次に設計すべきなのは **ORKB Reasoner Specification** です。
+
+理由は、現状のORKBは「知識を保存するDB」ですが、完全再現には
+
+```text
+知識
+↓
+推論
+↓
+裁定
+```
+
+の機構が必要だからです。
+
+ここまで作ると、カード固有裁定まで含めた「裁定エンジン」に近づきます。
+s

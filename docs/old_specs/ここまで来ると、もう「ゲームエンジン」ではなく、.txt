@@ -1,0 +1,714 @@
+ここまで来ると、もう「ゲームエンジン」ではなく、
+
+```text
+Duel Masters Card Operating System
+```
+
+の領域です。
+
+そして実は、
+
+```text
+Validator
+```
+
+だけでは全く足りません。
+
+例えば、
+
+```text
+このクリーチャーが出た時、
+相手のパワー3000以下のクリーチャーを1体破壊する。
+```
+
+というカードがあったとします。
+
+Validatorは
+
+```text
+構文OK
+型OK
+DSL OK
+Bytecode OK
+```
+
+までしか保証しません。
+
+しかし、
+
+```text
+対象が存在しない時
+
+置換効果がある時
+
+アンタッチャブルの時
+
+同時誘発がある時
+```
+
+に本当に正しく動くかは別問題です。
+
+そこで必要になるのが CCS です。
+
+---
+
+# Card Certification System (CCS)
+
+## 目的
+
+カード定義を
+
+```text
+登録可能
+```
+
+ではなく
+
+```text
+ゲーム投入可能
+```
+
+にする。
+
+---
+
+# システム全体
+
+```text
+Card JSON
+↓
+Validator
+↓
+Compiler
+↓
+Bytecode
+↓
+CCS
+↓
+Certified Card
+↓
+Card Registry
+```
+
+---
+
+# CCSの役割
+
+保証するもの
+
+```text
+構文正当性
+
+ルール正当性
+
+実行正当性
+
+裁定整合性
+
+決定論
+```
+
+---
+
+# CCS構成
+
+```text
+CCS
+
+├ Static Analyzer
+├ Scenario Generator
+├ Simulation Runner
+├ Oracle Checker
+├ Regression Tester
+├ Compatibility Tester
+└ Certification Report
+```
+
+---
+
+# 1. Static Analyzer
+
+Validatorより上位。
+
+---
+
+検査項目
+
+```text
+到達不能コード
+
+無限ループ
+
+未使用変数
+
+常に真
+
+常に偽
+
+不正なQuery
+```
+
+---
+
+例
+
+```json
+{
+ "Node":"If",
+ "Condition":true
+}
+```
+
+↓
+
+Else到達不能
+
+Warning
+
+---
+
+# 2. Scenario Generator
+
+最重要。
+
+---
+
+カード能力から
+
+自動で盤面を生成する。
+
+---
+
+例
+
+```text
+相手のクリーチャーを1体破壊
+```
+
+↓
+
+生成
+
+```text
+ケース1
+相手0体
+
+ケース2
+相手1体
+
+ケース3
+相手5体
+
+ケース4
+対象耐性あり
+
+ケース5
+置換効果あり
+```
+
+---
+
+# 3. Simulation Runner
+
+DMVM上で実行。
+
+---
+
+```text
+盤面生成
+
+↓
+
+能力実行
+
+↓
+
+結果取得
+```
+
+---
+
+1000〜10000ケース。
+
+---
+
+# 4. Oracle Checker
+
+期待結果と比較。
+
+---
+
+例
+
+```text
+入力
+
+相手3000
+
+相手5000
+```
+
+---
+
+期待
+
+```text
+3000破壊
+
+5000生存
+```
+
+---
+
+実行結果比較。
+
+---
+
+# Oracleの種類
+
+## Rule Oracle
+
+ルール整合
+
+---
+
+## Card Oracle
+
+カード固有
+
+---
+
+## Human Oracle
+
+人間確認
+
+---
+
+# 5. Regression Tester
+
+既存カード破壊検知。
+
+---
+
+例
+
+```text
+Rule Engine更新
+```
+
+↓
+
+全カード再テスト。
+
+---
+
+```text
+ボルメテウス
+
+ボルシャック
+
+ドギラゴン
+```
+
+全確認。
+
+---
+
+# 6. Compatibility Tester
+
+新カード追加時。
+
+---
+
+既存カードとの組み合わせ。
+
+---
+
+例
+
+```text
+新カード
+
+×
+
+既存10000枚
+```
+
+---
+
+主要相互作用確認。
+
+---
+
+# 裁定テスト
+
+重要。
+
+---
+
+例えば
+
+```text
+破壊されるかわりに手札へ
+```
+
+と
+
+```text
+破壊された時
+```
+
+の組み合わせ。
+
+---
+
+期待
+
+```text
+破壊されていない
+
+↓
+
+破壊時能力不発
+```
+
+---
+
+裁定通りか確認。
+
+---
+
+# Certification Level
+
+---
+
+## Level 0
+
+未検証
+
+---
+
+## Level 1
+
+構文OK
+
+---
+
+## Level 2
+
+単体テストOK
+
+---
+
+## Level 3
+
+相互作用OK
+
+---
+
+## Level 4
+
+裁定一致
+
+---
+
+## Level 5
+
+公式再現確認
+
+---
+
+推奨
+
+Level4以上
+
+---
+
+# Card Test Framework (CTF)
+
+CCSの実行基盤。
+
+---
+
+# テスト記法
+
+YAML形式推奨。
+
+---
+
+例
+
+```yaml
+name: destroy_small_creature
+
+setup:
+  playerA:
+    battlezone:
+      - TestCard
+
+  playerB:
+    battlezone:
+      - power: 3000
+      - power: 5000
+
+action:
+  cast: TestCard
+
+expect:
+  destroyed:
+    - power: 3000
+
+  alive:
+    - power: 5000
+```
+
+---
+
+# テスト構造
+
+```text
+Setup
+Action
+Expected
+```
+
+---
+
+# Setup
+
+初期盤面。
+
+---
+
+設定可能
+
+```text
+Deck
+
+Hand
+
+Mana
+
+BattleZone
+
+Shield
+
+Graveyard
+```
+
+---
+
+# Action
+
+行動。
+
+---
+
+例
+
+```yaml
+action:
+  summon: CardA
+```
+
+---
+
+```yaml
+action:
+  attack: CardB
+```
+
+---
+
+```yaml
+action:
+  resolve: TriggerA
+```
+
+---
+
+# Expect
+
+期待結果。
+
+---
+
+例
+
+```yaml
+expect:
+  handCount: 5
+```
+
+---
+
+```yaml
+expect:
+  manaCount: 7
+```
+
+---
+
+```yaml
+expect:
+  winner: playerA
+```
+
+---
+
+# Property-Based Testing
+
+超重要。
+
+---
+
+例
+
+```text
+1000ランダム盤面
+```
+
+生成。
+
+---
+
+能力実行。
+
+---
+
+検査。
+
+```text
+クラッシュしない
+
+無限ループしない
+
+状態破壊しない
+```
+
+---
+
+# Fuzz Testing
+
+LLM時代は必須。
+
+---
+
+ランダムDSL生成。
+
+---
+
+目的
+
+```text
+Validator突破
+
+↓
+
+Engineクラッシュ
+```
+
+を発見。
+
+---
+
+# Golden Test
+
+公式裁定再現。
+
+---
+
+例
+
+```text
+FAQ No.1234
+```
+
+↓
+
+そのままテスト化。
+
+---
+
+# 裁定ライブラリ
+
+最終的には
+
+```text
+Ruling Database
+```
+
+を作る。
+
+---
+
+構造
+
+```text
+CardID
+
+Question
+
+ExpectedResult
+
+TestCase
+```
+
+---
+
+# 理想的な運用
+
+```text
+カード画像
+↓
+OCR
+↓
+LLM
+↓
+Card JSON
+↓
+Validator
+↓
+Compiler
+↓
+CCS
+ ↓
+10000自動テスト
+ ↓
+Certification
+ ↓
+Card Registry
+```
+
+---
+
+## 完全版を目指すなら最後に必要なもの
+
+ここまで作るなら、さらに
+
+```text
+Official Ruling Knowledge Base (ORKB)
+```
+
+を設計したいです。
+
+なぜならデュエマには、
+
+* 総合ルール
+* 公式Q&A
+* 裁定変更履歴
+* 特例裁定
+
+が大量にあり、カードテキストだけでは再現できません。
+
+実際の完全再現エンジンでは、
+
+```text
+Card JSON
++
+Rule Engine
++
+Official Ruling Knowledge Base
+```
+
+の3つが揃って初めて紙環境に近い挙動になります。

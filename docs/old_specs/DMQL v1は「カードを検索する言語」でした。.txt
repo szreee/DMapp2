@@ -1,0 +1,664 @@
+DMQL v1は「カードを検索する言語」でした。
+
+しかし実際のデュエマでは、
+
+```text
+この進化クリーチャーの下にあるカード
+このクリーチャーの進化元
+このオレガ・オーラが付いているクリーチャー
+このドラグハートを装備しているドラグナー
+このクリーチャーに付いているクロスギア
+封印されているカード
+このクリーチャーの下のカードを1枚選ぶ
+```
+
+のように、
+
+**カード間の関係(Relationship)**
+
+を参照する能力が大量に存在します。
+
+そのためDMQL v2では、
+
+```text
+RDB(SQL)
+↓
+Graph Query
+```
+
+へ進化させます。
+
+---
+
+# DM Query Language Specification v2.0
+
+## 設計目標
+
+DMQL v2は
+
+```text
+カード
+↓
+カード間の関係
+↓
+ゲーム状態全体
+```
+
+を問い合わせ可能にする。
+
+---
+
+# 新要素
+
+追加される主要機能
+
+```text
+1. Relation Query
+2. Graph Traversal
+3. Event Query
+4. Zone Stack Query
+5. Dynamic Query
+6. Metadata Query
+```
+
+---
+
+# 1. Relation Query
+
+最重要機能。
+
+---
+
+カード同士の親子関係を扱う。
+
+基本構文
+
+```json
+{
+  "Relation":"EvolutionBase"
+}
+```
+
+---
+
+## Relation一覧
+
+### EvolutionBase
+
+進化元
+
+```text
+進化クリーチャー
+↓
+進化元
+```
+
+---
+
+### EvolutionParent
+
+進化先
+
+```text
+進化元
+↓
+進化クリーチャー
+```
+
+---
+
+### AttachedCards
+
+付属カード
+
+```text
+クロスギア
+
+オレガ・オーラ
+
+タマシード
+```
+
+---
+
+### AttachedTo
+
+装備先
+
+```text
+オーラ
+↓
+付いているクリーチャー
+```
+
+---
+
+### SealedCards
+
+封印カード
+
+```text
+禁断
+↓
+封印群
+```
+
+---
+
+### SealedBy
+
+封印先
+
+---
+
+### UnderCards
+
+下に置かれているカード
+
+---
+
+### OverCards
+
+上に乗っているカード
+
+---
+
+### LinkedCards
+
+リンク対象
+
+---
+
+### EquippedCards
+
+装備カード
+
+---
+
+### EquippedTo
+
+装備先
+
+---
+
+# Relation例
+
+## このクリーチャーの進化元
+
+```json
+{
+  "Source":"SourceCard",
+  "Relation":"EvolutionBase"
+}
+```
+
+---
+
+## このカードの下のカード
+
+```json
+{
+  "Source":"SourceCard",
+  "Relation":"UnderCards"
+}
+```
+
+---
+
+# 2. Graph Traversal
+
+関係を辿る。
+
+---
+
+例
+
+```text
+進化元の進化元
+```
+
+---
+
+DSL
+
+```json
+{
+  "Traverse":[
+    "EvolutionBase",
+    "EvolutionBase"
+  ]
+}
+```
+
+---
+
+例
+
+```text
+進化元すべて
+```
+
+---
+
+```json
+{
+  "Traverse":"RecursiveEvolutionBase"
+}
+```
+
+---
+
+# 3. Event Query
+
+イベント履歴参照。
+
+---
+
+デュエマで非常に重要。
+
+---
+
+例
+
+```text
+最後に破壊されたクリーチャー
+```
+
+---
+
+```json
+{
+  "Event":"Destroy",
+  "Order":"Last"
+}
+```
+
+---
+
+## Event一覧
+
+```text
+Summon
+Attack
+Block
+Destroy
+Move
+Draw
+Discard
+Reveal
+Tap
+Untap
+```
+
+---
+
+# 4. Zone Stack Query
+
+デッキやシールド内部参照。
+
+---
+
+## Top
+
+```json
+{
+  "Source":"Deck",
+  "Position":"Top"
+}
+```
+
+---
+
+## Bottom
+
+```json
+{
+  "Source":"Deck",
+  "Position":"Bottom"
+}
+```
+
+---
+
+## Range
+
+```json
+{
+  "Source":"Deck",
+  "Range":[1,5]
+}
+```
+
+---
+
+対応
+
+```text
+山札の上から5枚
+```
+
+---
+
+# 5. Dynamic Query
+
+現在値参照。
+
+---
+
+v1では
+
+```text
+BaseCost
+```
+
+しかなかった。
+
+---
+
+v2
+
+```text
+CurrentCost
+CurrentPower
+CurrentRace
+CurrentCivilization
+CurrentKeywords
+```
+
+---
+
+例
+
+```json
+{
+  "Field":"CurrentPower",
+  "Operator":">=",
+  "Value":6000
+}
+```
+
+---
+
+# 6. Metadata Query
+
+カード定義情報参照。
+
+---
+
+例
+
+```json
+{
+  "Field":"OriginalSet"
+}
+```
+
+---
+
+```json
+{
+  "Field":"CardNumber"
+}
+```
+
+---
+
+```json
+{
+  "Field":"CustomTags"
+}
+```
+
+---
+
+# Query Variables
+
+DSL実行中変数。
+
+---
+
+例
+
+```json
+{
+  "Ref":"SelectedCard"
+}
+```
+
+---
+
+追加
+
+```json
+{
+  "Ref":"SourceCard"
+}
+```
+
+---
+
+```json
+{
+  "Ref":"EventCard"
+}
+```
+
+---
+
+```json
+{
+  "Ref":"LastDestroyed"
+}
+```
+
+---
+
+```json
+{
+  "Ref":"AttackTarget"
+}
+```
+
+---
+
+# Aggregate v2
+
+---
+
+## Count
+
+```json
+{
+  "Aggregate":"Count"
+}
+```
+
+---
+
+## Sum
+
+```json
+{
+  "Aggregate":"Sum",
+  "Field":"Power"
+}
+```
+
+---
+
+## Max
+
+```json
+{
+  "Aggregate":"Max"
+}
+```
+
+---
+
+## Min
+
+```json
+{
+  "Aggregate":"Min"
+}
+```
+
+---
+
+# Recursive Query
+
+デュエマ完全再現に必須。
+
+---
+
+例
+
+```text
+進化元をすべて数える
+```
+
+---
+
+```json
+{
+  "Relation":"EvolutionBase",
+  "Recursive":true
+}
+```
+
+---
+
+# Query Example 1
+
+## 「このクリーチャーの下にあるカードを1枚選ぶ」
+
+```json
+{
+  "Source":"SourceCard",
+
+  "Relation":"UnderCards",
+
+  "Limit":1
+}
+```
+
+---
+
+# Query Example 2
+
+## 「名前にボルシャックを含む進化ではないドラゴン」
+
+```json
+{
+  "AND":[
+
+    {
+      "Field":"Name",
+      "Operator":"Contains",
+      "Value":"ボルシャック"
+    },
+
+    {
+      "Field":"Race",
+      "Operator":"Contains",
+      "Value":"Dragon"
+    },
+
+    {
+      "Field":"Evolution",
+      "Operator":"Equals",
+      "Value":false
+    }
+  ]
+}
+```
+
+---
+
+# Query Example 3
+
+## 「この進化クリーチャーの進化元をすべて破壊する」
+
+```json
+{
+  "Source":"SourceCard",
+
+  "Relation":"EvolutionBase",
+
+  "Recursive":true
+}
+```
+
+---
+
+# DMQL v2で追加されるVM命令
+
+DMVM側には以下を追加する。
+
+```text
+QUERY_RELATION
+
+QUERY_EVENT
+
+QUERY_STACK
+
+QUERY_DYNAMIC
+
+QUERY_RECURSIVE
+
+TRAVERSE
+
+COUNT_RELATION
+
+COUNT_RECURSIVE
+
+GET_PARENT
+
+GET_CHILDREN
+```
+
+---
+
+# v2完成時の到達点
+
+DMQL v2でほぼ全時代のデュエマギミックが表現可能になる。
+
+対応可能な代表例
+
+```text
+進化
+進化V
+進化GV
+究極進化
+スター進化
+クロスギア
+オレガオーラ
+ドラグハート
+禁断
+封印
+GR
+超GR
+サイキック
+覚醒
+リンク
+タマシード
+```
+
+ただし、完全再現を目指すなら次は **「Continuous Effect Layer System Specification」** が必要です。
+
+なぜならデュエマには、
+
+```text
+パワー+2000
+↓
+さらに倍
+↓
+能力を失う
+↓
+種族を追加
+↓
+文明を失う
+```
+
+のような常在効果の競合があり、これを正しく処理するにはDMVM上でレイヤーシステムを定義する必要があるからです。これが実質的に「紙DM完全再現」の最後の大きな壁になります。

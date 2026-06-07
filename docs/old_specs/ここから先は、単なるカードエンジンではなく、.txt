@@ -1,0 +1,815 @@
+ここから先は、単なるカードエンジンではなく、
+
+```text
+カードテキスト
+↓
+構文解析
+↓
+意味解析
+↓
+DSL
+↓
+Bytecode
+```
+
+という**デュエマ専用コンパイラ**の世界になります。
+
+実際、ATCだけでは不十分です。
+
+例えば、
+
+> 相手のクリーチャーを1体破壊する。その後、カードを1枚引く。
+
+と
+
+> カードを1枚引く。その後、相手のクリーチャーを1体破壊する。
+
+は全く違う能力です。
+
+また、
+
+> 相手のクリーチャーを1体破壊してもよい。そうしたらカードを1枚引く。
+
+では、
+
+```text
+破壊成功
+↓
+引く
+```
+
+という依存関係があります。
+
+そのためATCの上位に
+
+# Ability Grammar Specification (AGS) v1.0
+
+を置く必要があります。
+
+---
+
+# 1. AGSの役割
+
+ATCとの関係
+
+```text
+ATC
+=
+語彙辞書
+
+AGS
+=
+文法定義
+```
+
+---
+
+例
+
+カードテキスト
+
+```text
+相手のクリーチャーを1体破壊する。
+その後、カードを1枚引く。
+```
+
+ATC
+
+```text
+DESTROY
+DRAW
+```
+
+だけ取得。
+
+---
+
+AGS
+
+```text
+Sequence
+├─ Destroy
+└─ Draw
+```
+
+を生成。
+
+---
+
+# 2. コンパイルパイプライン
+
+```text
+Card Text
+
+↓
+
+Tokenizer
+
+↓
+
+ATC Match
+
+↓
+
+AGS Parser
+
+↓
+
+Ability AST
+
+↓
+
+DSL Generator
+
+↓
+
+Bytecode Generator
+```
+
+---
+
+# 3. AST
+
+中心構造。
+
+```cpp
+struct FAbilityAST
+{
+    NodeType;
+
+    Children[];
+
+    Parameters;
+}
+```
+
+---
+
+# 4. Node Type
+
+```cpp
+enum class ENodeType
+{
+    Action,
+
+    Sequence,
+
+    Condition,
+
+    Choice,
+
+    Loop,
+
+    Trigger,
+
+    Replacement,
+
+    Continuous,
+
+    Procedure,
+
+    Query
+};
+```
+
+---
+
+# 5. Action Node
+
+最小単位。
+
+```text
+カードを1枚引く
+```
+
+↓
+
+```json
+{
+  "Node":"Action",
+  "Action":"Draw",
+  "Count":1
+}
+```
+
+---
+
+# 6. Sequence Node
+
+最重要。
+
+---
+
+文章
+
+```text
+Aする。
+その後Bする。
+```
+
+↓
+
+AST
+
+```text
+Sequence
+├─ A
+└─ B
+```
+
+---
+
+DSL
+
+```json
+{
+  "Sequence":[
+     A,
+     B
+  ]
+}
+```
+
+---
+
+# 7. Conditional Node
+
+---
+
+文章
+
+```text
+もし○○なら
+```
+
+↓
+
+AST
+
+```text
+If
+├─ Condition
+└─ Body
+```
+
+---
+
+例
+
+```text
+自分のシールドが0枚なら、
+カードを3枚引く。
+```
+
+---
+
+AST
+
+```text
+If
+├─ ShieldCount==0
+└─ Draw3
+```
+
+---
+
+# 8. Then Node
+
+重要。
+
+---
+
+デュエマ頻出。
+
+```text
+そうしたら
+```
+
+---
+
+意味。
+
+```text
+前処理成功
+↓
+後処理
+```
+
+---
+
+例
+
+```text
+クリーチャーを破壊する。
+そうしたらカードを引く。
+```
+
+---
+
+AST
+
+```text
+Then
+├─ Destroy
+└─ Draw
+```
+
+---
+
+実行。
+
+```text
+Destroy成功
+↓
+Draw
+```
+
+---
+
+# 9. Choice Node
+
+---
+
+文章
+
+```text
+次のうち1つ選ぶ
+```
+
+---
+
+AST
+
+```text
+ChooseOne
+├─ OptionA
+├─ OptionB
+└─ OptionC
+```
+
+---
+
+# 10. Optional Node
+
+---
+
+文章
+
+```text
+～してもよい
+```
+
+---
+
+AST
+
+```text
+May
+└─ Action
+```
+
+---
+
+実行時。
+
+```text
+Player Choice
+```
+
+発生。
+
+---
+
+# 11. Loop Node
+
+---
+
+文章
+
+```text
+1体につき
+```
+
+---
+
+AST
+
+```text
+ForEach
+├─ Query
+└─ Action
+```
+
+---
+
+# 12. While Node
+
+---
+
+文章
+
+```text
+～するまで
+```
+
+---
+
+AST
+
+```text
+While
+├─ Condition
+└─ Body
+```
+
+---
+
+# 13. Repeat Node
+
+---
+
+文章
+
+```text
+○回繰り返す
+```
+
+---
+
+AST
+
+```text
+Repeat
+├─ Count
+└─ Body
+```
+
+---
+
+# 14. Trigger Node
+
+---
+
+文章
+
+```text
+出た時
+```
+
+---
+
+AST
+
+```text
+Trigger
+├─ EnterBattleZone
+└─ Body
+```
+
+---
+
+# 15. Replacement Node
+
+---
+
+文章
+
+```text
+かわりに
+```
+
+---
+
+AST
+
+```text
+Replacement
+├─ Event
+└─ ReplacementAction
+```
+
+---
+
+# 16. Continuous Node
+
+---
+
+文章
+
+```text
+～の間
+```
+
+---
+
+AST
+
+```text
+Continuous
+├─ Condition
+└─ Effect
+```
+
+---
+
+# 17. Query Node
+
+DMQL統合。
+
+---
+
+文章
+
+```text
+自分のドラゴン1体
+```
+
+↓
+
+```text
+QueryNode
+```
+
+↓
+
+DMQL
+
+```sql
+Controller=Self
+AND Race=Dragon
+LIMIT 1
+```
+
+---
+
+# 18. Procedure Node
+
+---
+
+文章
+
+```text
+ガチンコ・ジャッジする
+```
+
+↓
+
+AST
+
+```text
+Procedure
+└─ GachinkoJudge
+```
+
+---
+
+# 19. Grammar Tokens
+
+代表。
+
+```text
+その後
+
+そうしたら
+
+もし
+
+なら
+
+かわりに
+
+まで
+
+につき
+
+選ぶ
+
+してもよい
+```
+
+---
+
+Tokenizerで抽出。
+
+---
+
+# 20. EBNF
+
+簡易。
+
+```ebnf
+Ability
+
+  = TriggerClause
+  | ConditionalClause
+  | SequenceClause
+  | ActionClause
+```
+
+---
+
+```ebnf
+SequenceClause
+
+  = Action
+    { "その後" Action }
+```
+
+---
+
+```ebnf
+ConditionalClause
+
+  = "もし"
+    Condition
+    "なら"
+    Ability
+```
+
+---
+
+```ebnf
+OptionalClause
+
+  = Ability
+    "してもよい"
+```
+
+---
+
+# 21. DSL生成
+
+AST
+
+```text
+Sequence
+├─ Destroy
+└─ Draw
+```
+
+↓
+
+DSL
+
+```json
+{
+  "Sequence":[
+    {
+      "Action":"Destroy"
+    },
+    {
+      "Action":"Draw"
+    }
+  ]
+}
+```
+
+---
+
+# 22. Bytecode生成
+
+AST
+
+```text
+Sequence
+├─ Destroy
+└─ Draw
+```
+
+↓
+
+```text
+DESTROY
+DRAW
+```
+
+---
+
+AST
+
+```text
+If
+├─ Condition
+└─ Draw
+```
+
+↓
+
+```text
+CHECK_CONDITION
+
+JUMP_IF_FALSE
+
+DRAW
+```
+
+---
+
+# 23. CCSテスト
+
+入力
+
+```text
+相手のクリーチャーを破壊する。
+その後カードを1枚引く。
+```
+
+---
+
+期待AST
+
+```text
+Sequence
+├─ Destroy
+└─ Draw
+```
+
+---
+
+入力
+
+```text
+もしシールドが0枚なら
+3枚引く
+```
+
+---
+
+期待AST
+
+```text
+If
+├─ ShieldCount==0
+└─ Draw3
+```
+
+---
+
+# AGS v2で追加すべきもの
+
+ここで一つ問題が出ます。
+
+AGSで構文解析はできますが、
+
+```text
+そのクリーチャー
+
+これ
+
+このターン
+
+その後
+
+こうして出した
+```
+
+などの日本語特有の参照関係は解決できません。
+
+例えば、
+
+```text
+相手のクリーチャーを1体選ぶ。
+そのクリーチャーを破壊する。
+```
+
+では
+
+```text
+そのクリーチャー
+```
+
+が何かを解決しなければなりません。
+
+この部分は文法ではなく意味解析です。
+
+そのためDMVM完成に向けて次に必要なのは
+
+# Semantic Binding System (SBS)
+
+です。
+
+役割は
+
+```text
+AGS
+=
+構文解析
+
+SBS
+=
+意味解析
+```
+
+になります。
+
+特にデュエマの裁定で頻出する
+
+```text
+そのクリーチャー
+このクリーチャー
+これ
+こうして出した
+その後
+```
+
+を機械的に解決するための中核仕様になります。

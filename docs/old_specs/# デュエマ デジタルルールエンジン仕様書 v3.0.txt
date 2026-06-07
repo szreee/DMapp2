@@ -1,0 +1,569 @@
+# デュエマ デジタルルールエンジン仕様書 v3.0
+
+## （LLMカード追加対応版）
+
+# 1. 設計目標
+
+本システムは、
+
+* Unreal Engine 5
+* サーバー権威型(Server Authoritative)
+* JSONによるカード追加
+* LLMによるカード効果生成
+
+を前提として設計する。
+
+カードごとにC++やBlueprintを追加実装しない。
+
+新カードはJSONを追加するだけで利用可能とする。
+
+ルールエンジンはJSONに記述された効果を解釈して実行する。
+
+---
+
+# 2. システム全体構成
+
+```text
+ADuelGameState
+ └ URuleEngine
+
+      ├ UActionQueue
+      ├ UEffectManager
+      ├ UTriggerManager
+      ├ UStateManager
+      ├ UTargetManager
+      └ UCardDatabase
+```
+
+---
+
+## ADuelGameState
+
+ゲーム全体管理。
+
+保持情報
+
+* 現在ターン
+* 現在フェーズ
+* ターンプレイヤー
+* ターンタイマー
+* 勝敗状態
+
+---
+
+## URuleEngine
+
+ルールエンジン本体。
+
+全アクションは必ずここを経由する。
+
+---
+
+## UActionQueue
+
+解決待ちアクション管理。
+
+FIFO方式。
+
+```text
+召喚
+ ↓
+cip
+ ↓
+ドロー
+ ↓
+破壊
+ ↓
+pig
+```
+
+を順番に処理する。
+
+---
+
+## UEffectManager
+
+効果管理。
+
+管理対象
+
+* 置換効果
+* 継続効果
+* 常在効果
+
+---
+
+## UTriggerManager
+
+誘発効果管理。
+
+管理対象
+
+* 出た時
+* 攻撃時
+* 破壊時
+* ターン開始時
+* ターン終了時
+
+---
+
+## UStateManager
+
+現在状態計算。
+
+管理対象
+
+* コスト
+* パワー
+* 文明
+* 種族
+* 能力追加
+
+---
+
+## UTargetManager
+
+対象選択処理。
+
+管理対象
+
+* クリーチャー選択
+* プレイヤー選択
+* シールド選択
+* マナ選択
+
+---
+
+## UCardDatabase
+
+JSONカード管理。
+
+起動時に全JSONをロードする。
+
+---
+
+# 3. カードデータ構造
+
+カードはJSONで保存する。
+
+例
+
+```json
+{
+  "CardID":100001,
+
+  "Name":"サンプルドラゴン",
+
+  "Type":"Creature",
+
+  "Civilizations":["Fire"],
+
+  "Cost":5,
+
+  "Power":5000,
+
+  "Races":["Armored Dragon"],
+
+  "Effects":[]
+}
+```
+
+---
+
+# 4. 効果システム
+
+効果はEffect配列で保持する。
+
+```json
+{
+  "Effects":[
+    {
+      "Type":"Trigger",
+      "Event":"OnEnter",
+      "Actions":[]
+    }
+  ]
+}
+```
+
+---
+
+# 5. Trigger構造
+
+例
+
+```json
+{
+  "Type":"Trigger",
+
+  "Event":"OnEnter",
+
+  "Conditions":[ ],
+
+  "Actions":[ ]
+}
+```
+
+---
+
+## Event一覧
+
+* OnEnter
+* OnLeave
+* OnDestroy
+* OnAttack
+* OnBlock
+* OnTurnStart
+* OnTurnEnd
+* OnShieldBreak
+* OnCast
+* OnDraw
+* OnManaAdded
+
+---
+
+# 6. Condition構造
+
+条件を分離する。
+
+```json
+{
+  "Type":"ControllerIs",
+
+  "Value":"Self"
+}
+```
+
+例
+
+```json
+{
+  "Type":"CardMoved",
+
+  "Conditions":
+  [
+    {
+      "Type":"DestinationZone",
+      "Value":"BattleZone"
+    }
+  ]
+}
+```
+
+---
+
+# 7. Action構造
+
+すべての能力は原始命令へ分解する。
+
+---
+
+## Draw
+
+```json
+{
+  "Type":"Draw",
+
+  "Count":1
+}
+```
+
+---
+
+## Move
+
+```json
+{
+  "Type":"Move",
+
+  "Source":"Deck",
+
+  "Destination":"Hand",
+
+  "Count":1
+}
+```
+
+---
+
+## Destroy
+
+```json
+{
+  "Type":"Destroy",
+
+  "Target":"Selected"
+}
+```
+
+---
+
+## Tap
+
+```json
+{
+  "Type":"Tap",
+
+  "Target":"Selected"
+}
+```
+
+---
+
+## Untap
+
+```json
+{
+  "Type":"Untap",
+
+  "Target":"Selected"
+}
+```
+
+---
+
+## Reveal
+
+```json
+{
+  "Type":"Reveal",
+
+  "Target":"Selected"
+}
+```
+
+---
+
+## AddModifier
+
+```json
+{
+  "Type":"AddModifier",
+
+  "Stat":"Power",
+
+  "Value":2000
+}
+```
+
+---
+
+# 8. TargetSelector
+
+対象選択を独立管理する。
+
+例
+
+```json
+{
+  "Selector":
+  {
+    "Zone":"BattleZone",
+
+    "Controller":"Opponent",
+
+    "Count":1
+  }
+}
+```
+
+---
+
+## 利用例
+
+```json
+{
+  "Type":"Destroy",
+
+  "Selector":
+  {
+    "Zone":"BattleZone",
+
+    "Controller":"Opponent",
+
+    "Count":1
+  }
+}
+```
+
+---
+
+# 9. Replacement効果
+
+置換効果はアクション変換で処理する。
+
+例
+
+```json
+{
+  "Type":"Replacement",
+
+  "Event":"OnDestroy",
+
+  "Transform":
+  {
+    "Type":"Move",
+
+    "Destination":"Hand"
+  }
+}
+```
+
+---
+
+処理順
+
+```text
+DestroyAction
+
+ ↓
+
+EffectManager
+
+ ↓
+
+MoveToHandAction
+
+ ↓
+
+Queue実行
+```
+
+---
+
+# 10. Modifierシステム
+
+基礎値は変更しない。
+
+```text
+BasePower
+ +
+Modifier
+ =
+CurrentPower
+```
+
+---
+
+例
+
+```json
+{
+  "Type":"Modifier",
+
+  "Stat":"Power",
+
+  "Value":2000
+}
+```
+
+---
+
+# 11. ActionContext
+
+全アクションに付与する。
+
+```cpp
+struct FActionContext
+{
+    EActionType ActionType;
+
+    FString SourceCardID;
+
+    FString SourcePlayerID;
+
+    FString TargetCardID;
+
+    EZoneType SourceZone;
+
+    EZoneType DestinationZone;
+
+    bool bWasReplaced;
+
+    bool bWasCancelled;
+};
+```
+
+---
+
+# 12. 効果実行順
+
+```text
+Queue Pop
+
+ ↓
+
+Replacement Check
+
+ ↓
+
+Execute
+
+ ↓
+
+Trigger Check
+
+ ↓
+
+New Action Queue Push
+
+ ↓
+
+Next
+```
+
+---
+
+# 13. ターンタイマー
+
+FTimerManager使用。
+
+ターン開始
+
+```cpp
+SetTimer(90秒)
+```
+
+時間切れ
+
+```text
+Queue Clear
+
+ ↓
+
+Turn End
+```
+
+---
+
+# 14. LLM連携
+
+LLMは以下のみ生成する。
+
+* カード基本情報
+* Effect
+* Trigger
+* Condition
+* Action
+* Selector
+
+LLMはルール処理を生成しない。
+
+ルール処理は常にRuleEngine側が担当する。
+
+---
+
+# 15. 将来拡張
+
+追加可能
+
+* 双極篇以降カード
+* 超次元
+* GR召喚
+* オーラ
+* D2フィールド
+* ツインパクト
+* 王来MAX
+* アビスラッシュ
+
+すべて新JSON追加のみで対応可能とする。

@@ -1,0 +1,745 @@
+ここから先は、実は **LLMより重要** な領域です。
+
+なぜならデュエマは
+
+```text
+カードテキスト
+≠
+実際の裁定
+```
+
+だからです。
+
+例えば、
+
+```text
+可能なら～
+できるなら～
+そうしたら～
+かわりに～
+```
+
+は文章としては単純ですが、
+
+実際の裁定では
+
+```text
+失敗しても続行
+成功しないと続行しない
+対象が消えた場合
+置換後は破壊扱いか
+```
+
+など大量の暗黙ルールがあります。
+
+つまり最終構成は
+
+```text
+Card Definition
++
+Rule Engine
++
+ORKB
+```
+
+になります。
+
+---
+
+# Official Ruling Knowledge Base Specification v1.0
+
+## 目的
+
+ORKBは
+
+```text
+総合ルール
+公式Q&A
+裁定変更
+例外裁定
+```
+
+を機械可読形式で管理する。
+
+---
+
+# 基本思想
+
+カードテキストだけで解決しない。
+
+---
+
+例
+
+```text
+破壊されるかわりに手札に戻る
+```
+
+↓
+
+ORKB
+
+```text
+破壊扱いではない
+墓地へ行っていない
+破壊された時能力は誘発しない
+```
+
+---
+
+# システム構成
+
+```text
+ORKB
+
+├ Rule Database
+├ Ruling Database
+├ FAQ Database
+├ Precedent Database
+├ Version Database
+└ Query Engine
+```
+
+---
+
+# 1. Rule Database
+
+総合ルール。
+
+---
+
+例
+
+```json
+{
+  "RuleID":"CR-601",
+
+  "Title":"召喚",
+
+  "Version":"2026-01",
+
+  "Text":"..."
+}
+```
+
+---
+
+保存対象
+
+```text
+ゲーム開始
+
+ターン進行
+
+召喚
+
+攻撃
+
+シールド
+
+勝敗
+```
+
+---
+
+# 2. Ruling Database
+
+公式裁定。
+
+---
+
+構造
+
+```json
+{
+  "RulingID":"R-000001",
+
+  "CardID":"DM23RP1-001",
+
+  "Question":"破壊されるかわりに手札へ戻った場合は？",
+
+  "Answer":"破壊されていないため..."
+}
+```
+
+---
+
+# 3. FAQ Database
+
+公式FAQ。
+
+---
+
+例
+
+```json
+{
+  "FAQID":"FAQ-1456",
+
+  "RelatedCards":[
+      "DM001",
+      "DM002"
+  ],
+
+  "Question":"AとBが同時に起きた場合？",
+
+  "Answer":"..."
+}
+```
+
+---
+
+# 4. Precedent Database
+
+判例DB。
+
+---
+
+重要。
+
+---
+
+カード固有ではなく
+
+ルールパターン化する。
+
+---
+
+例
+
+```text
+破壊置換
+```
+
+---
+
+```json
+{
+  "Pattern":"DestroyReplacement",
+
+  "Result":"NotDestroyed"
+}
+```
+
+---
+
+# 5. Version Database
+
+裁定変更履歴。
+
+---
+
+例
+
+```json
+{
+  "RuleID":"CR-701",
+
+  "Version":"2024.01",
+
+  "Old":"A",
+
+  "New":"B"
+}
+```
+
+---
+
+# Rule Object
+
+ORKB内部表現。
+
+---
+
+```json
+{
+  "RuleID":"CR-901",
+
+  "Category":"Replacement",
+
+  "Priority":10,
+
+  "Conditions":[],
+
+  "Conclusions":[]
+}
+```
+
+---
+
+# Rule Category
+
+分類。
+
+---
+
+```text
+CoreRule
+
+Replacement
+
+Trigger
+
+SBA
+
+Evolution
+
+Attack
+
+Shield
+
+WinLose
+
+ZoneMove
+```
+
+---
+
+# Rule Query Engine
+
+DMVMから利用。
+
+---
+
+例
+
+```text
+Destroy
+↓
+Replacement存在
+↓
+ORKB参照
+```
+
+---
+
+返却
+
+```json
+{
+  "Destroyed":false
+}
+```
+
+---
+
+# Rule Tags
+
+検索用。
+
+---
+
+例
+
+```json
+[
+ "Destroy",
+ "Replacement",
+ "MoveToHand"
+]
+```
+
+---
+
+# Semantic Rules
+
+文章ではなく意味を保持。
+
+---
+
+例
+
+```json
+{
+  "Pattern":"IfSucceeded",
+
+  "Requirement":"PreviousActionSuccess"
+}
+```
+
+---
+
+対応
+
+```text
+そうしたら
+そうした場合
+```
+
+---
+
+# Keyword Semantics
+
+重要。
+
+---
+
+```json
+{
+  "Keyword":"SpeedAttacker",
+
+  "Meaning":{
+      "IgnoreSummoningSickness":true
+  }
+}
+```
+
+---
+
+```json
+{
+  "Keyword":"Blocker",
+
+  "Meaning":{
+      "CanBlock":true
+  }
+}
+```
+
+---
+
+# Ability Templates
+
+頻出能力。
+
+---
+
+例
+
+```json
+{
+  "Template":"DestroySmallCreature",
+
+  "DSL":"..."
+}
+```
+
+---
+
+LLM補助用。
+
+---
+
+# Conflict Resolution
+
+裁定競合。
+
+---
+
+優先順位
+
+```text
+Official Ruling
+
+↓
+
+FAQ
+
+↓
+
+Precedent
+
+↓
+
+General Rule
+```
+
+---
+
+# Confidence System
+
+重要。
+
+---
+
+裁定に確信度付与。
+
+---
+
+```json
+{
+  "Confidence":0.98
+}
+```
+
+---
+
+LLM生成裁定
+
+```json
+{
+  "Confidence":0.52
+}
+```
+
+---
+
+# Ruling Graph
+
+v2候補。
+
+---
+
+裁定同士の関連。
+
+---
+
+例
+
+```text
+DestroyReplacement
+
+↓
+
+MoveReplacement
+
+↓
+
+ExileReplacement
+```
+
+---
+
+グラフ管理。
+
+---
+
+# LLM Integration
+
+用途
+
+```text
+カード解析
+
+裁定検索
+
+DSL生成
+
+FAQ生成
+```
+
+---
+
+禁止
+
+```text
+LLMが直接裁定決定
+```
+
+---
+
+必ず
+
+```text
+LLM
+↓
+ORKB検索
+↓
+結果採用
+```
+
+---
+
+# Rule Validation
+
+カード登録時。
+
+---
+
+```text
+Card JSON
+
+↓
+
+Validator
+
+↓
+
+ORKB Validator
+
+↓
+
+Certification
+```
+
+---
+
+例
+
+```text
+破壊された時
+```
+
+能力発見。
+
+---
+
+ORKB
+
+```text
+DestroyDefinition
+```
+
+確認。
+
+---
+
+# Regression Testing連携
+
+裁定変更。
+
+---
+
+自動実行。
+
+---
+
+```text
+Rule Change
+
+↓
+
+All Test Cases
+
+↓
+
+Re-certify
+```
+
+---
+
+# ORKB API
+
+主要API
+
+```cpp
+GetRule()
+```
+
+---
+
+```cpp
+GetRuling()
+```
+
+---
+
+```cpp
+FindPrecedent()
+```
+
+---
+
+```cpp
+ResolveConflict()
+```
+
+---
+
+```cpp
+ExplainDecision()
+```
+
+---
+
+# Explainability
+
+超重要。
+
+---
+
+エンジンが
+
+```text
+なぜそうなったか
+```
+
+説明できる。
+
+---
+
+例
+
+```text
+このクリーチャーは破壊されませんでした。
+
+理由:
+CR-901
+DestroyReplacement
+
+適用効果:
+MoveToHand
+```
+
+---
+
+# 最終構成
+
+完成形はこうなります。
+
+```text
+Card Image
+↓
+OCR
+↓
+LLM Parser
+↓
+Card JSON
+↓
+Validator
+↓
+Compiler
+↓
+CCS
+↓
+Certified Card Registry
+
+                ↓
+           DMVM Engine
+                ↓
+             DMQL
+                ↓
+             PRS
+                ↓
+             SBA
+                ↓
+             CELS
+                ↓
+             ORKB
+```
+
+## ここで一度立ち止まって考えるべきこと
+
+この設計のままだと、カード1枚追加するだけでも
+
+```text
+LLM
+↓
+Validator
+↓
+Compiler
+↓
+CCS
+↓
+ORKB確認
+```
+
+という非常に重いパイプラインになります。
+
+実運用では、
+
+**「公式カードをどう登録するか」**
+
+と
+
+**「新弾発売時に数百枚をどう一括投入するか」**
+
+が最大のボトルネックになります。
+
+なので次に設計するなら、
+
+```text
+Bulk Card Import Pipeline (BCIP)
+```
+
+つまり「公式カードセットを数百枚単位で自動登録するシステム」の仕様になります。これは実際に運用可能なカードデータベースを作る上で必須です。

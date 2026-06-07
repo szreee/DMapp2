@@ -1,0 +1,604 @@
+かなり本格的な話になりますが、結論から言うと、
+
+```text
+公式カード検索をスクレイピングする
+↓
+そのままJSON化する
+```
+
+は最終手段にした方がいいです。
+
+理由は3つあります。
+
+---
+
+# まずBCIPの役割
+
+今のアーキテクチャでは
+
+```text
+Card Image
+↓
+OCR
+↓
+LLM
+↓
+Card JSON
+↓
+Validator
+↓
+Compiler
+↓
+CCS
+↓
+Registry
+```
+
+ですが、
+
+新弾が出るたびに
+
+```text
+100～300枚
+```
+
+を手動投入するのは現実的ではありません。
+
+そこで
+
+```text
+Bulk Card Import Pipeline
+(BCIP)
+```
+
+が必要になります。
+
+---
+
+# Bulk Card Import Pipeline Specification v1.0
+
+## 1. 目的
+
+大量のカードを自動登録する。
+
+対象
+
+* 公式カード
+* 新弾
+* プロモ
+* 超次元
+* GR
+* ドラグハート
+* 禁断
+
+---
+
+## 2. システム構成
+
+BCIP
+
+├ Source Connector
+├ Extractor
+├ OCR Engine
+├ Text Normalizer
+├ LLM Parser
+├ Validator
+├ Compiler
+├ CCS Runner
+└ Registry Importer
+
+---
+
+## 3. Import Flow
+
+Source
+
+↓
+
+Raw Data
+
+↓
+
+Normalize
+
+↓
+
+Card Definition
+
+↓
+
+Validate
+
+↓
+
+Compile
+
+↓
+
+Certify
+
+↓
+
+Registry
+
+---
+
+## 4. Source Connector
+
+入力ソース
+
+### Official Card Search
+
+カード検索
+
+### Official Product Page
+
+商品ページ
+
+### Image Archive
+
+カード画像
+
+### Community Database
+
+補助データ
+
+---
+
+## 5. Card Extraction
+
+抽出項目
+
+CardID
+
+Name
+
+Cost
+
+Civilization
+
+Race
+
+Power
+
+Text
+
+Illustrator
+
+Rarity
+
+Product
+
+ReleaseDate
+
+---
+
+## 6. OCR
+
+カード画像から
+
+CardText
+
+を抽出
+
+---
+
+推奨
+
+Google Vision
+
+PaddleOCR
+
+Tesseract
+
+---
+
+## 7. Text Normalizer
+
+表記揺れ修正
+
+例
+
+Ｔ・ブレイカー
+
+↓
+
+T・ブレイカー
+
+---
+
+例
+
+シールドを１枚
+
+↓
+
+シールドを1枚
+
+---
+
+## 8. LLM Parser
+
+カードテキスト
+
+↓
+
+DSL AST
+
+---
+
+出力禁止
+
+自然言語
+
+---
+
+出力必須
+
+AST
+
+---
+
+## 9. Validator
+
+Schema
+
+Semantic
+
+Rule
+
+DMQL
+
+Bytecode
+
+---
+
+## 10. Compiler
+
+DSL
+
+↓
+
+DMVM Bytecode
+
+---
+
+## 11. CCS
+
+自動テスト
+
+---
+
+Level4以上のみ採用
+
+---
+
+## 12. Registry Import
+
+認証済みカードのみ
+
+登録
+
+---
+
+## 13. Incremental Import
+
+新弾のみ追加
+
+---
+
+差分検出
+
+CardID
+
+Version
+
+Hash
+
+---
+
+## 14. Rollback
+
+不正検出
+
+↓
+
+前Versionへ戻す
+
+---
+
+## 15. Metadata
+
+保持
+
+CardImage
+
+CardText
+
+OriginalSource
+
+ImportDate
+
+SchemaVersion
+
+CertificationLevel
+
+---
+
+## 16. Audit Log
+
+誰が
+
+いつ
+
+何を
+
+登録したか
+
+保持
+
+---
+
+## 17. Batch Size
+
+推奨
+
+100〜500枚
+
+---
+
+## 18. Performance
+
+20000枚規模
+
+30分以内を目標
+
+---
+
+## 19. Failure Handling
+
+Validator失敗
+
+↓
+
+隔離領域
+
+Quarantine
+
+へ移動
+
+---
+
+## 20. Final Output
+
+CardRegistry
+
+↓
+
+DMVMで利用可能
+
+---
+
+# カード情報はどこから取るべきか？
+
+現在、公式カード検索には **22,528枚以上** のカードが登録されています。([デュエル・マスターズ][1])
+
+候補は4つあります。
+
+---
+
+## 案1（おすすめ）
+
+公式カード検索 → メタデータ取得
+
+カード画像 → OCR
+
+```text
+公式DB
+↓
+カード名
+文明
+種族
+コスト
+パワー
+
++
+
+画像OCR
+↓
+能力テキスト
+```
+
+メリット
+
+* 情報が正確
+* 更新が早い
+* 全カード存在
+
+デメリット
+
+* スクレイピング負荷
+* 利用規約確認必須
+
+---
+
+## 案2
+
+公式画像だけ取得
+
+```text
+画像
+↓
+OCR
+↓
+全解析
+```
+
+メリット
+
+* ソースが1つ
+
+デメリット
+
+* 誤認識が多い
+* 昔のカードで失敗しやすい
+
+---
+
+## 案3
+
+コミュニティDB利用
+
+例
+
+* TCG Portal
+* トレカネット
+
+などには大量のカードデータがあります。([TCG PORTAL][2])
+
+メリット
+
+* 取得しやすい
+
+デメリット
+
+* 誤記がある
+* 更新遅延
+* 法的に微妙
+
+---
+
+## 案4（私ならこれ）
+
+半自動カードアーカイブを作る
+
+```text
+公式検索
+↓
+CardID一覧取得
+
+↓
+
+カード詳細ページ取得
+
+↓
+
+JSON生成
+
+↓
+
+画像保存
+
+↓
+
+ローカルDB
+```
+
+つまり
+
+```text
+DM Card Archive
+```
+
+を自前で作る。
+
+---
+
+# 私ならこう設計する
+
+Phase1
+
+```text
+カード基本情報のみ
+
+CardID
+Name
+Cost
+Power
+Civilization
+Race
+Text
+```
+
+を全22,528枚取得。([デュエル・マスターズ][1])
+
+---
+
+Phase2
+
+```text
+OCR
+↓
+LLM
+↓
+Effect DSL
+```
+
+変換。
+
+---
+
+Phase3
+
+```text
+CCS
+```
+
+で自動検証。
+
+---
+
+Phase4
+
+```text
+ORKB
+```
+
+と照合。
+
+---
+
+# 実はもっと大きな問題
+
+デュエマ完全再現で本当に難しいのは、
+
+```text
+カード収集
+```
+
+ではなく
+
+```text
+裁定収集
+```
+
+です。
+
+カード22,528枚は取得できますが、([デュエル・マスターズ][1])
+
+```text
+総合ルール
+FAQ
+公式Q&A
+過去裁定
+裁定変更履歴
+```
+
+は散在しています。
+
+なのでDMVM完成を目指すなら、
+
+BCIPの次は
+
+```text
+Official Ruling Import Pipeline (ORIP)
+```
+
+つまり
+
+**公式Q&A・総合ルール・裁定変更履歴を収集してORKBへ投入するパイプライン**
+
+を設計した方が、実はエンジン完成度への寄与が大きいです。
+
+[1]: https://dm.takaratomy.co.jp/card/?utm_source=chatgpt.com "カード検索 | デュエル・マスターズ"
+[2]: https://tcg-portal.jp/duelmasters/cards?utm_source=chatgpt.com "デュエル・マスターズ カード一覧"

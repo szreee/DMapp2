@@ -1,0 +1,135 @@
+# Effect DSL Specification v1.0
+
+## 目的
+
+カードテキストをJSON化し、
+RuleEngineが解釈可能にする。
+
+カードごとのC++実装は禁止。
+
+全能力をDSLで記述する。
+
+---
+
+# Effect
+
+```json
+{
+  "Type":"Trigger",
+  "Event":"OnEnter",
+  "Actions":[]
+}
+```
+
+---
+
+# Action一覧
+
+## Draw
+
+```json
+{
+  "Type":"Draw",
+  "Count":1
+}
+```
+
+---
+
+## Destroy
+
+```json
+{
+  "Type":"Destroy",
+  "Target":"Selected"
+}
+```
+
+---
+
+## Move
+
+```json
+{
+  "Type":"Move",
+  "Destination":"Hand"
+}
+```
+
+---
+
+## Tap
+
+```json
+{
+  "Type":"Tap"
+}
+```
+
+---
+
+## Untap
+
+```json
+{
+  "Type":"Untap"
+}
+```
+
+---
+
+# Sequence
+
+「その後」
+
+「そうしたら」
+
+を表現。
+
+```json
+{
+  "Type":"Sequence",
+  "Actions":[]
+}
+```
+
+---
+
+# If
+
+条件分岐
+
+```json
+{
+  "Type":"If",
+  "Condition":{},
+  "Then":[]
+}
+```
+
+---
+
+# Optional
+
+「してもよい」
+
+```json
+{
+  "Type":"Optional",
+  "Actions":[]
+}
+```
+
+---
+
+# Repeat
+
+繰り返し
+
+```json
+{
+  "Type":"Repeat",
+  "Count":3,
+  "Actions":[]
+}
+```

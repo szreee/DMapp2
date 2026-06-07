@@ -1,0 +1,761 @@
+ここはかなり重要です。
+
+実は今までの設計をコンパイラになぞらえると、
+
+```text
+カードテキスト
+↓
+DSL
+↓
+Bytecode
+```
+
+は設計できています。
+
+一方で裁定側は
+
+```text
+総合ルール
+FAQ
+公式Q&A
+判例
+↓
+？？？
+↓
+Reasoner
+↓
+Runtime Rule
+```
+
+となっており、
+
+**「裁定のAST/IR」が存在しない**
+
+状態です。
+
+---
+
+# なぜRIRが必要なのか
+
+例えば公式裁定に
+
+```text
+「破壊されるかわりに手札に戻る場合、
+そのクリーチャーは破壊されたことになりません。」
+```
+
+と書かれている。
+
+人間には分かります。
+
+しかしエンジンに必要なのは
+
+```text
+DestroyAttempt
+↓
+ReplacementApplied
+↓
+NotDestroyed
+↓
+NoOnDestroyTrigger
+```
+
+です。
+
+つまり
+
+```text
+自然言語
+↓
+意味表現
+↓
+実行ルール
+```
+
+の中間層が必要になります。
+
+これがRIRです。
+
+---
+
+# RIRの位置
+
+最終構成
+
+```text
+ORIP
+↓
+Rule Text
+
+↓
+Semantic Parser
+
+↓
+RIR
+
+↓
+Reasoner
+
+↓
+Compiled Rule Set
+
+↓
+DMVM Runtime
+```
+
+---
+
+# RIR設計目標
+
+RIRは
+
+```text
+人間向け
+でもなく
+
+DMVM向け
+でもない
+```
+
+存在にする。
+
+つまり
+
+```text
+裁定の意味
+```
+
+だけを表現する。
+
+---
+
+# RIR基本構造
+
+```cpp
+struct FRIRRule
+{
+    FString RuleID;
+
+    ERIRRuleType Type;
+
+    TArray<FRIRCondition> Conditions;
+
+    TArray<FRIRConclusion> Conclusions;
+
+    int32 Priority;
+
+    FString Source;
+};
+```
+
+---
+
+# Rule Type
+
+まず分類。
+
+```cpp
+enum class ERIRRuleType
+{
+    CoreRule,
+    Replacement,
+    Trigger,
+    Restriction,
+    Permission,
+    StateBasedAction,
+    KeywordAbility,
+    Precedent
+};
+```
+
+---
+
+例
+
+```text
+スピードアタッカー
+```
+
+↓
+
+```cpp
+KeywordAbility
+```
+
+---
+
+例
+
+```text
+かわりに
+```
+
+↓
+
+```cpp
+Replacement
+```
+
+---
+
+# Condition
+
+条件。
+
+---
+
+例
+
+```text
+破壊される時
+```
+
+↓
+
+```cpp
+Condition:
+Event == DestroyAttempt
+```
+
+---
+
+構造
+
+```cpp
+struct FRIRCondition
+{
+    FString Predicate;
+    TArray<FVariant> Args;
+};
+```
+
+---
+
+例
+
+```json
+{
+  "Predicate":"Event",
+  "Args":[
+      "DestroyAttempt"
+  ]
+}
+```
+
+---
+
+# Conclusion
+
+結果。
+
+---
+
+例
+
+```text
+破壊されない
+```
+
+↓
+
+```json
+{
+  "Predicate":"SetDestroyed",
+  "Args":[false]
+}
+```
+
+---
+
+# Predicate System
+
+RIRの核。
+
+---
+
+例
+
+```text
+Event
+
+Zone
+
+Controller
+
+Power
+
+Cost
+
+Keyword
+
+HasAbility
+
+Destroyed
+```
+
+---
+
+推奨。
+
+100〜300個程度。
+
+---
+
+# RIR例1
+
+置換効果。
+
+---
+
+裁定
+
+```text
+破壊されるかわりに手札へ戻る
+```
+
+---
+
+RIR
+
+```json
+{
+  "RuleType":"Replacement",
+
+  "Conditions":[
+    {
+      "Predicate":"Event",
+      "Args":["DestroyAttempt"]
+    }
+  ],
+
+  "Conclusions":[
+    {
+      "Predicate":"ReplaceAction",
+      "Args":["MoveToHand"]
+    },
+    {
+      "Predicate":"SetDestroyed",
+      "Args":[false]
+    }
+  ]
+}
+```
+
+---
+
+# RIR例2
+
+スピードアタッカー
+
+---
+
+RIR
+
+```json
+{
+  "RuleType":"KeywordAbility",
+
+  "Conditions":[],
+
+  "Conclusions":[
+    {
+      "Predicate":"IgnoreSummonSickness",
+      "Args":[true]
+    }
+  ]
+}
+```
+
+---
+
+# RIR例3
+
+パワー0破壊
+
+---
+
+総合ルール
+
+```text
+パワー0以下は破壊
+```
+
+---
+
+RIR
+
+```json
+{
+  "RuleType":"StateBasedAction",
+
+  "Conditions":[
+    {
+      "Predicate":"PowerLE",
+      "Args":[0]
+    }
+  ],
+
+  "Conclusions":[
+    {
+      "Predicate":"Destroy"
+    }
+  ]
+}
+```
+
+---
+
+# Fact Graph
+
+Reasoner内部。
+
+---
+
+推論前
+
+```text
+DestroyAttempt
+```
+
+---
+
+推論後
+
+```text
+DestroyAttempt
+↓
+Replacement
+↓
+NotDestroyed
+```
+
+---
+
+グラフ保持。
+
+---
+
+# Derived Rule
+
+Reasoner成果物。
+
+---
+
+例。
+
+```text
+NotDestroyed
+```
+
+から。
+
+```text
+NoOnDestroyTrigger
+```
+
+導出。
+
+---
+
+RIR
+
+```json
+{
+  "Derived":true
+}
+```
+
+---
+
+# Priority
+
+必須。
+
+---
+
+```cpp
+enum class ERIRPriority
+{
+    CoreRule=100,
+
+    Keyword=200,
+
+    FAQ=300,
+
+    CardSpecific=400
+};
+```
+
+---
+
+高い方優先。
+
+---
+
+# Conflict Model
+
+デュエマで重要。
+
+---
+
+例。
+
+```text
+置換A
+
+置換B
+```
+
+同時。
+
+---
+
+RIR
+
+```json
+{
+  "ConflictResolution":"ControllerChooses"
+}
+```
+
+---
+
+# Semantic Layer
+
+LLM支援。
+
+---
+
+例。
+
+```text
+そうしたら
+```
+
+↓
+
+```json
+{
+  "Semantic":"IfSucceeded"
+}
+```
+
+---
+
+例。
+
+```text
+してもよい
+```
+
+↓
+
+```json
+{
+  "Semantic":"Optional"
+}
+```
+
+---
+
+# RIR Compiler
+
+ここからRuntimeへ。
+
+---
+
+入力
+
+```text
+RIR
+```
+
+---
+
+出力
+
+```text
+Compiled Rule Set
+```
+
+---
+
+例。
+
+```json
+{
+  "Event":"DestroyAttempt",
+
+  "Replacement":"MoveToHand",
+
+  "Destroyed":false
+}
+```
+
+---
+
+# RIR Validation
+
+重要。
+
+---
+
+検査項目。
+
+### 到達不能
+
+```text
+Condition=false
+```
+
+---
+
+### 循環推論
+
+```text
+A→B→A
+```
+
+---
+
+### 競合
+
+```text
+Destroyed=true
+
+Destroyed=false
+```
+
+---
+
+### 不完全
+
+```text
+Conditionのみ
+```
+
+---
+
+禁止。
+
+---
+
+# RIRとCCS
+
+理想。
+
+---
+
+CCS
+
+↓
+
+Scenario
+
+↓
+
+RIR
+
+↓
+
+Expected Result
+
+↓
+
+DMVM
+
+↓
+
+Compare
+
+---
+
+# 私ならさらに追加するもの
+
+実はRIRだけだとまだ弱いです。
+
+完全再現を目指すなら、
+
+```text
+RIR
+↓
+RIR Graph
+```
+
+を持ちます。
+
+---
+
+例えば
+
+```text
+DestroyReplacement
+```
+
+は
+
+```text
+DestroyAttempt
+↓
+Move
+↓
+NotDestroyed
+↓
+NoDestroyTrigger
+```
+
+という依存グラフになる。
+
+---
+
+これを保持すると、
+
+```text
+ExplainDecision()
+```
+
+で
+
+```text
+なぜそうなったか
+```
+
+を完全に説明できます。
+
+---
+
+## 私が最終的に採用するRIR
+
+もし本当に22,528枚＋全裁定を目指すなら、
+
+```text
+RIR Node
++
+RIR Graph
++
+Predicate System
++
+Priority System
++
+Conflict System
+```
+
+の4本柱にします。
+
+これは実質的に
+
+```text
+デュエマ専用 Prolog
+```
+
+に近い構造になります。
+
+そして次の段階では、
+
+**Predicate Catalog Specification**
+
+（RIRやDMQLやDSLやReasonerが共通利用する全述語の定義書）
+
+を作るべきです。
+
+実はこれが無いと、各システムで `Destroy` や `Move` の意味が微妙にズレ始めて、後で大規模な破綻が起きます。

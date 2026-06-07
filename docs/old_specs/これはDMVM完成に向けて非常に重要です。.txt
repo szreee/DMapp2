@@ -1,0 +1,844 @@
+これはDMVM完成に向けて非常に重要です。
+
+ここまで作った仕様群は、
+
+```text
+ルールを実行する仕組み
+```
+
+でした。
+
+しかし実際のデュエマカードの90%以上は
+
+```text
+スピードアタッカー
+W・ブレイカー
+ブロッカー
+侵略
+革命チェンジ
+G・ストライク
+EXライフ
+```
+
+などのキーワード能力で記述されています。
+
+つまりLLMが最終的に出力するカードJSONも
+
+```json
+{
+  "KeywordAbilities":[
+    "SpeedAttacker",
+    "DoubleBreaker"
+  ]
+}
+```
+
+になるはずです。
+
+そこで必要になるのが
+
+# Keyword Ability Formalization Specification (KAFS) v1.0
+
+です。
+
+---
+
+# 1. 目的
+
+KAFSは全キーワード能力を
+
+```text
+公式テキスト
+↓
+意味論(Semantics)
+↓
+DSL
+↓
+Bytecode
+```
+
+へ変換するための標準辞書である。
+
+---
+
+# 2. KAFSの位置
+
+```text
+Card JSON
+↓
+KeywordAbilities
+↓
+KAFS
+↓
+Generated DSL
+↓
+DMVM
+```
+
+---
+
+# 3. 基本モデル
+
+```cpp
+struct FKeywordAbility
+{
+    KeywordID;
+
+    Name;
+
+    Category;
+
+    Parameters;
+
+    GeneratedEffects[];
+}
+```
+
+---
+
+# 4. キーワード分類
+
+```cpp
+enum class EKeywordCategory
+{
+    Combat,
+
+    Summon,
+
+    Trigger,
+
+    Continuous,
+
+    Replacement,
+
+    SpecialAction,
+
+    Protection,
+
+    ZoneChange,
+
+    Resource
+};
+```
+
+---
+
+# 5. Combat系
+
+---
+
+## Speed Attacker
+
+公式意味
+
+```text
+出たターンでも攻撃できる
+```
+
+---
+
+DSL
+
+```json
+{
+  "Permission":{
+     "IgnoreSummoningSickness":true
+  }
+}
+```
+
+---
+
+ALDS連携。
+
+---
+
+## Double Breaker
+
+公式意味
+
+```text
+シールドを2枚ブレイク
+```
+
+---
+
+DSL
+
+```json
+{
+  "ModifyAttack":{
+      "BreakCount":2
+  }
+}
+```
+
+---
+
+## Triple Breaker
+
+```json
+{
+  "ModifyAttack":{
+      "BreakCount":3
+  }
+}
+```
+
+---
+
+## World Breaker
+
+```json
+{
+  "ModifyAttack":{
+      "BreakAllShields":true
+  }
+}
+```
+
+---
+
+## Infinite Breaker
+
+```json
+{
+  "ModifyAttack":{
+      "BreakCount":"Infinity"
+  }
+}
+```
+
+---
+
+## Slayer
+
+公式。
+
+```text
+バトルした相手を破壊
+```
+
+---
+
+DSL
+
+```json
+{
+  "Trigger":{
+      "Event":"BattleFinished",
+      "Action":"DestroyOpponent"
+  }
+}
+```
+
+---
+
+## Blocker
+
+公式。
+
+```text
+ブロック宣言可能
+```
+
+---
+
+DSL
+
+```json
+{
+  "Permission":{
+      "CanBlock":true
+  }
+}
+```
+
+---
+
+## Power Attacker
+
+パラメータあり。
+
+---
+
+例
+
+```text
+パワーアタッカー+3000
+```
+
+---
+
+DSL
+
+```json
+{
+  "ContinuousEffect":{
+      "Condition":"Attacking",
+      "PowerModifier":3000
+  }
+}
+```
+
+---
+
+# 6. Summon系
+
+---
+
+## Evolution
+
+特殊。
+
+---
+
+```json
+{
+  "Procedure":"Evolution"
+}
+```
+
+---
+
+## Infinite Evolution
+
+```json
+{
+  "Procedure":"InfiniteEvolution"
+}
+```
+
+---
+
+## Neo Evolution
+
+専用Procedure。
+
+---
+
+## G-NEO Evolution
+
+専用Procedure。
+
+---
+
+# 7. Trigger系
+
+---
+
+## S Trigger
+
+```json
+{
+  "SpecialAction":{
+      "Window":"ShieldTrigger"
+  }
+}
+```
+
+---
+
+TWSAS連携。
+
+---
+
+## G Strike
+
+```json
+{
+  "SpecialAction":{
+      "Window":"GStrike"
+  }
+}
+```
+
+---
+
+## S Back
+
+```json
+{
+  "SpecialAction":{
+      "Window":"SBack"
+  }
+}
+```
+
+---
+
+## Burst Shot系
+
+誘発能力化。
+
+---
+
+# 8. Continuous系
+
+---
+
+## Turbo Rush
+
+条件付き継続効果。
+
+---
+
+```json
+{
+  "Condition":"AttackSucceeded"
+}
+```
+
+---
+
+## Samurai
+
+種族追加。
+
+---
+
+## Knight
+
+同様。
+
+---
+
+# 9. Replacement系
+
+---
+
+## EX Life
+
+非常に重要。
+
+---
+
+意味。
+
+```text
+破壊される代わりに
+シールドを1枚失う
+```
+
+---
+
+DSL
+
+```json
+{
+  "Replacement":{
+      "Event":"LeaveBattleZone"
+  }
+}
+```
+
+---
+
+EffectManager連携。
+
+---
+
+## Last Barrier
+
+同様。
+
+---
+
+## Eternal Ω
+
+専用置換。
+
+---
+
+# 10. Special Action系
+
+---
+
+## Invasion
+
+侵略。
+
+---
+
+```json
+{
+  "SpecialAction":{
+      "Window":"AttackDeclared"
+  }
+}
+```
+
+---
+
+## Invasion Zero
+
+追加条件付き。
+
+---
+
+## Revolution Change
+
+```json
+{
+  "SpecialAction":{
+      "Window":"AttackDeclared"
+  }
+}
+```
+
+---
+
+## Ninja Strike
+
+```json
+{
+  "SpecialAction":{
+      "Window":"OpponentAttack"
+  }
+}
+```
+
+---
+
+## Muketsu Gate
+
+専用。
+
+---
+
+# 11. Protection系
+
+---
+
+## Just Diver
+
+意味。
+
+```text
+相手の効果で選ばれない
+```
+
+---
+
+DSL
+
+```json
+{
+  "Protection":{
+      "CannotBeChosen":true
+  }
+}
+```
+
+---
+
+## Ambush
+
+同系統。
+
+---
+
+## Untargetable
+
+統一化。
+
+---
+
+# 12. Resource系
+
+---
+
+## Mana Burst
+
+---
+
+## Mana Weapon
+
+---
+
+## Odo Attack
+
+---
+
+これらは条件効果へ変換。
+
+---
+
+# 13. Composition系
+
+---
+
+## Aura
+
+```json
+{
+  "Composition":"Aura"
+}
+```
+
+---
+
+## Cross Gear
+
+```json
+{
+  "Composition":"CrossGear"
+}
+```
+
+---
+
+## Dragheart
+
+```json
+{
+  "Composition":"Dragheart"
+}
+```
+
+---
+
+# 14. Zone Change系
+
+---
+
+## Awakening
+
+```json
+{
+  "Procedure":"Awaken"
+}
+```
+
+---
+
+## Dragonic Flip
+
+```json
+{
+  "Procedure":"DragonicFlip"
+}
+```
+
+---
+
+## Forbidden Release
+
+```json
+{
+  "Procedure":"ForbiddenRelease"
+}
+```
+
+---
+
+# 15. Parameterized Keyword
+
+重要。
+
+---
+
+```text
+PowerAttacker+3000
+```
+
+は
+
+```json
+{
+  "Keyword":"PowerAttacker",
+  "Value":3000
+}
+```
+
+---
+
+として保持。
+
+---
+
+# 16. Keyword Registry
+
+実装。
+
+```cpp
+UKeywordRegistry
+```
+
+---
+
+責務。
+
+```cpp
+ResolveKeyword()
+
+GenerateDSL()
+
+GenerateBytecode()
+```
+
+---
+
+# 17. JSON表現
+
+推奨。
+
+```json
+{
+  "KeywordAbilities":[
+    {
+      "Keyword":"SpeedAttacker"
+    },
+    {
+      "Keyword":"DoubleBreaker"
+    }
+  ]
+}
+```
+
+---
+
+パラメータ付き。
+
+```json
+{
+  "KeywordAbilities":[
+    {
+      "Keyword":"PowerAttacker",
+      "Value":3000
+    }
+  ]
+}
+```
+
+---
+
+# 18. LLM向け設計
+
+LLMは
+
+```text
+スピードアタッカー
+```
+
+を見たら
+
+```json
+{
+  "Keyword":"SpeedAttacker"
+}
+```
+
+だけ出力する。
+
+---
+
+DSL生成は
+
+```text
+KAFS
+```
+
+が担当。
+
+---
+
+つまり
+
+```text
+LLM
+↓
+Keyword抽出
+↓
+KAFS
+↓
+DSL生成
+```
+
+になる。
+
+---
+
+# 19. CCS統合
+
+テスト。
+
+入力
+
+```json
+{
+  "Keyword":"DoubleBreaker"
+}
+```
+
+期待。
+
+```text
+BreakCount=2
+```
+
+---
+
+入力
+
+```json
+{
+  "Keyword":"SpeedAttacker"
+}
+```
+
+期待。
+
+```text
+IgnoreSummoningSickness=true
+```
+
+---
+
+# 20. KAFS v2で追加すべきもの
+
+v1.0で扱うべきなのは約150〜200種の主要キーワードです。
+
+しかしデュエマ完全再現を目指すなら、次の段階では
+
+```text
+22,528枚すべてのカード能力
+```
+
+を
+
+```text
+キーワード
++
+テンプレート能力
++
+自由記述能力
+```
+
+へ分類する必要があります。
+
+そのため次に必要なのは
+
+# Ability Template Catalog (ATC)
+
+です。
+
+これは
+
+```text
+「相手のクリーチャーを1体破壊する」
+「カードを1枚引く」
+「◯◯なら〜する」
+```
+
+のような、数万枚のカードに共通する能力テンプレートを標準化する辞書になります。
+
+実際には
+
+```text
+KAFS
++
+ATC
+```
+
+で全カードの80〜95%程度をDSLへ自動変換できるようになるはずです。

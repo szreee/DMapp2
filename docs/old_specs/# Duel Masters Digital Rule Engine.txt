@@ -1,0 +1,775 @@
+# Duel Masters Digital Rule Engine Specification v4.0
+
+## (LLM Native Architecture)
+
+# 1. 開発目標
+
+本システムはデュエル・マスターズ紙環境の完全再現を目的とする。
+
+以下を必須要件とする。
+
+* サーバー権威
+* JSONによるカード追加
+* LLMによるカード生成
+* カード毎の実装禁止
+* DSL実行方式
+* 非同期オンライン対戦対応
+
+---
+
+# 2. システム構成
+
+```text
+ADuelGameMode
+
+ └ ADuelGameState
+
+      └ URuleEngine
+
+           ├ UActionQueue
+           ├ UEffectVM
+           ├ UEffectManager
+           ├ UTriggerManager
+           ├ UReplacementManager
+           ├ UStateManager
+           ├ UTargetManager
+           ├ UCostManager
+           ├ UZoneManager
+           ├ URuleManager
+           └ UCardDatabase
+```
+
+---
+
+# 3. コア思想
+
+## カードは処理を持たない
+
+禁止
+
+```cpp
+Card->OnEnter();
+Card->Destroy();
+```
+
+---
+
+許可
+
+```json
+{
+  "Effects":[]
+}
+```
+
+のみ。
+
+---
+
+カードはデータ。
+
+処理はRuleEngineが担当。
+
+---
+
+# 4. Card Database
+
+## データロード
+
+起動時
+
+```text
+/CardDatabase/
+```
+
+を全走査。
+
+---
+
+読み込み対象
+
+```text
+*.json
+```
+
+---
+
+ロード後
+
+```cpp
+TMap<int32,UCardDefinition>
+```
+
+へ格納。
+
+---
+
+# 5. Card Instance
+
+## Definition
+
+不変情報
+
+```cpp
+UCardDefinition
+```
+
+---
+
+保持
+
+* 名前
+* コスト
+* 文明
+* 種族
+* 効果
+
+---
+
+## Runtime
+
+ゲーム中情報
+
+```cpp
+UCardInstance
+```
+
+---
+
+保持
+
+* InstanceID
+* CurrentZone
+* Controller
+* Tapped
+* Counters
+* Attachments
+* EvolutionBase
+
+---
+
+# 6. Rule Engine
+
+唯一のルール処理機関。
+
+---
+
+外部から直接変更禁止。
+
+禁止
+
+```cpp
+Card->Zone = Graveyard
+```
+
+---
+
+許可
+
+```cpp
+RuleEngine->PushAction()
+```
+
+---
+
+# 7. Action Queue
+
+すべての処理をAction化。
+
+---
+
+例
+
+```text
+Summon
+
+↓
+
+Move
+
+↓
+
+Trigger
+
+↓
+
+Draw
+```
+
+---
+
+FIFO管理。
+
+---
+
+Action例
+
+```cpp
+MoveAction
+DestroyAction
+DrawAction
+AttackAction
+PayCostAction
+RevealAction
+SelectAction
+```
+
+---
+
+# 8. Effect VM
+
+最重要システム。
+
+---
+
+役割
+
+```text
+JSON DSL
+
+↓
+
+Action生成
+
+↓
+
+Queue投入
+```
+
+---
+
+カード能力を実行する。
+
+---
+
+例
+
+```json
+{
+ "Type":"Draw",
+ "Count":2
+}
+```
+
+↓
+
+```cpp
+DrawAction(2)
+```
+
+生成。
+
+---
+
+# 9. Execution Context
+
+全Actionに付与。
+
+```cpp
+struct FExecutionContext
+{
+    ActionID;
+
+    SourceCard;
+
+    SourcePlayer;
+
+    Targets;
+
+    SelectedCards;
+
+    CurrentZone;
+
+    PreviousZone;
+
+    SuccessFlag;
+
+    RandomSeed;
+};
+```
+
+---
+
+# 10. Rule Manager
+
+ゲーム共通ルール。
+
+---
+
+管理
+
+```text
+召喚酔い
+
+攻撃可能判定
+
+文明判定
+
+コスト支払い
+
+進化条件
+
+勝敗判定
+```
+
+---
+
+API
+
+```cpp
+CanSummon()
+
+CanAttack()
+
+CanBlock()
+
+CanPayCost()
+
+CanTarget()
+```
+
+---
+
+# 11. State Manager
+
+現在値計算。
+
+---
+
+管理
+
+```text
+Power
+
+Cost
+
+Civilization
+
+Race
+
+Keyword
+```
+
+---
+
+式
+
+```text
+Base
+
++
+
+Modifier
+
+=
+
+Current
+```
+
+---
+
+毎回再計算。
+
+---
+
+# 12. Trigger Manager
+
+イベント監視。
+
+---
+
+例
+
+```text
+OnEnter
+
+OnDestroy
+
+OnAttack
+
+OnDraw
+```
+
+---
+
+イベント発生
+
+↓
+
+該当Effect抽出
+
+↓
+
+Queue投入
+
+---
+
+# 13. Replacement Manager
+
+置換効果専用。
+
+---
+
+例
+
+```text
+Destroy
+
+↓
+
+MoveToHand
+```
+
+---
+
+Action変換。
+
+---
+
+キャンセル禁止。
+
+---
+
+常にTransform。
+
+---
+
+# 14. Target Manager
+
+対象選択管理。
+
+---
+
+例
+
+```json
+{
+ "Controller":"Opponent",
+ "Zone":"BattleZone"
+}
+```
+
+↓
+
+候補生成。
+
+---
+
+プレイヤー選択。
+
+---
+
+結果保存。
+
+---
+
+# 15. Cost Manager
+
+支払い管理。
+
+---
+
+処理
+
+```text
+BaseCost
+
+↓
+
+Modifier
+
+↓
+
+CurrentCost
+
+↓
+
+文明確認
+
+↓
+
+支払い
+```
+
+---
+
+文明条件
+
+完全再現。
+
+---
+
+例
+
+火自然
+
+↓
+
+火または自然必須。
+
+---
+
+# 16. Zone Manager
+
+ゾーン移動管理。
+
+---
+
+禁止
+
+直接移動。
+
+---
+
+許可
+
+```cpp
+MoveAction
+```
+
+のみ。
+
+---
+
+イベント
+
+```text
+BeforeMove
+
+Move
+
+AfterMove
+```
+
+---
+
+# 17. State Based Actions
+
+Action終了ごと実行。
+
+---
+
+例
+
+```text
+Power <= 0
+
+↓
+
+Destroy
+```
+
+---
+
+封印0
+
+↓
+
+禁断解放
+
+---
+
+# 18. Priority Pipeline
+
+実行順固定。
+
+```text
+Queue Pop
+
+↓
+
+Replacement
+
+↓
+
+Execute
+
+↓
+
+StateBasedAction
+
+↓
+
+Trigger Register
+
+↓
+
+Trigger Queue
+
+↓
+
+State Recalculate
+
+↓
+
+Next
+```
+
+---
+
+# 19. Hidden Information
+
+完全分離。
+
+---
+
+サーバーのみ保持。
+
+---
+
+クライアント送信禁止。
+
+```text
+DeckOrder
+
+Hand
+
+ShieldContent
+```
+
+---
+
+# 20. Networking
+
+Server Authoritative。
+
+---
+
+Client
+
+↓
+
+RequestAction
+
+↓
+
+ServerValidate
+
+↓
+
+RuleEngine
+
+↓
+
+Replication
+
+---
+
+# 21. Turn Timer
+
+FTimerManager使用。
+
+---
+
+90秒
+
+↓
+
+Expire
+
+↓
+
+Turn End
+
+---
+
+# 22. Replay System
+
+全Action記録。
+
+---
+
+保存
+
+```cpp
+ActionID
+
+Context
+
+Result
+```
+
+---
+
+リプレイ生成可能。
+
+---
+
+# 23. LLM Interface
+
+入力
+
+```text
+カード画像
+```
+
+---
+
+出力
+
+```json
+CardDefinition
+```
+
+---
+
+LLMの責務
+
+* OCR
+* 効果抽出
+* DSL生成
+
+---
+
+RuleEngineの責務
+
+* 効果実行
+* ルール保証
+
+---
+
+# 24. 拡張要件
+
+将来対応
+
+* サイキック
+* ドラグハート
+* 禁断
+* GR
+* オレガオーラ
+* タマシード
+* スター進化
+* アビス
+* 超化獣
+
+---
+
+新ギミック追加時
+
+Card JSON追加のみ。
+
+RuleEngine改修を最小化すること。
+v4でさらに追加したい要素
+
+実はこの仕様でも、デュエマ完全再現にはまだ足りません。
+
+次に必要になるのは、
+
+Effect DSL v2
+「そうしたら」
+「その後」
+「そうした場合」
+「〜するかわりに」
+「可能なら」
+「〜するたび」
+Query Language
+「名前に○○を含む」
+「コスト5以下」
+「ドラゴンを持つ」
+「このターン出た」
+Continuous Layer System
+MTGのレイヤーほどではないが、継続効果競合を解決する仕組み
+
+です。
+
+特にデュエマ完全再現の最大の難所は「ルールエンジン」ではなく、「カードテキストをDSLへ落とし込む仕様」なので、次のv5は Effect DSL v2 の設計になると思います。

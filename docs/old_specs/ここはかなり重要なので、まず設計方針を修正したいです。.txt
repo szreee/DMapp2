@@ -1,0 +1,699 @@
+ここはかなり重要なので、まず設計方針を修正したいです。
+
+デュエマにおいて「状態ベース処理(State Based Action)」は、MTGほど巨大ではありません。
+
+実際には、
+
+```text
+Action解決
+↓
+置換効果
+↓
+状態ベース処理
+↓
+誘発登録
+↓
+誘発解決
+```
+
+の順で処理する「ルール強制システム」です。
+
+ただし、覚醒・リンク・禁断解放などは厳密にはSBAではなく「条件監視型自動処理」に近いので、
+
+私はSBAを以下の2種類に分離します。
+
+```text
+SBA Core
+ルール上必須
+
+SBA AutoProcess
+条件成立時の強制イベント
+```
+
+これを分けた方が後の実装が楽になります。
+
+---
+
+# State Based Action Specification v1.0
+
+## (SBA System)
+
+# 1. 目的
+
+State Based Action (SBA) は
+
+プレイヤーの意思に関係なく
+
+ルールによって強制的に実行される処理を定義する。
+
+---
+
+# 2. 実行タイミング
+
+SBAは以下のタイミングで実行する。
+
+Action解決
+
+↓
+
+Continuous Layer再計算
+
+↓
+
+SBA評価
+
+↓
+
+Trigger登録
+
+↓
+
+Trigger解決
+
+↓
+
+NextAction
+
+---
+
+# 3. 実行モデル
+
+SBAは
+
+ループ収束
+
+するまで繰り返す。
+
+---
+
+Pseudo
+
+while(HasPendingSBA())
+{
+ExecuteSBA();
+}
+
+---
+
+理由
+
+Power0破壊
+
+↓
+
+別カードがPower0
+
+↓
+
+さらに破壊
+
+が発生するため。
+
+---
+
+# 4. SBA分類
+
+CategoryA
+
+Core Rule
+
+---
+
+CategoryB
+
+Zone Integrity
+
+---
+
+CategoryC
+
+Automatic Process
+
+---
+
+CategoryD
+
+Win Lose
+
+---
+
+# 5. Core Rule SBA
+
+## SBA_001
+
+Power <= 0
+
+---
+
+条件
+
+CurrentPower <= 0
+
+---
+
+処理
+
+Destroy
+
+---
+
+例
+
+2000
+
+↓
+
+-4000
+
+↓
+
+0以下
+
+↓
+
+破壊
+
+---
+
+優先度
+
+Highest
+
+---
+
+# 6. SBA_002
+
+存在不正
+
+---
+
+条件
+
+存在してはいけない状態
+
+---
+
+例
+
+BattleZoneとHandに同時存在
+
+---
+
+処理
+
+ログ出力
+
+強制修正
+
+---
+
+# 7. SBA_003
+
+進化整合性
+
+---
+
+条件
+
+進化元消失
+
+---
+
+処理
+
+進化クリーチャー処理
+
+---
+
+実装依存
+
+---
+
+# 8. Zone Integrity
+
+## SBA_010
+
+カード重複
+
+---
+
+InstanceID重複禁止
+
+---
+
+## SBA_011
+
+不正所有者
+
+---
+
+Owner不整合
+
+---
+
+修正実行
+
+---
+
+## SBA_012
+
+Attachment不整合
+
+---
+
+装備先消失
+
+---
+
+Attachment解除
+
+---
+
+# 9. Win Lose
+
+## SBA_100
+
+山札切れ
+
+---
+
+条件
+
+Draw要求
+
+かつ
+
+DeckCount == 0
+
+---
+
+処理
+
+敗北
+
+---
+
+重要
+
+デュエマでは
+
+山札0枚
+
+では負けない。
+
+---
+
+引こうとして引けない
+
+↓
+
+敗北
+
+---
+
+## SBA_101
+
+投了
+
+---
+
+即敗北
+
+---
+
+## SBA_102
+
+特殊勝利
+
+---
+
+カード効果依存
+
+---
+
+RuleEngineへ通知
+
+---
+
+# 10. Automatic Process
+
+以下は厳密にはSBAではない。
+
+---
+
+AutoProcessとして実装。
+
+---
+
+# 11. AP_001
+
+覚醒
+
+---
+
+条件
+
+AwakenCondition == true
+
+---
+
+処理
+
+AwakenAction
+
+---
+
+# 12. AP_002
+
+リンク
+
+---
+
+条件
+
+LinkCondition == true
+
+---
+
+処理
+
+LinkAction
+
+---
+
+# 13. AP_003
+
+解除
+
+---
+
+条件
+
+DeAwakenCondition
+
+---
+
+処理
+
+DeAwakenAction
+
+---
+
+# 14. AP_004
+
+禁断解放
+
+---
+
+条件
+
+SealCount == 0
+
+---
+
+処理
+
+ForbiddenRelease
+
+---
+
+# 15. AP_005
+
+龍解
+
+---
+
+条件
+
+DragonicCondition
+
+---
+
+処理
+
+DragheartFlip
+
+---
+
+# 16. AP_006
+
+超覚醒
+
+---
+
+条件
+
+SuperAwakenCondition
+
+---
+
+処理
+
+SuperAwaken
+
+---
+
+# 17. AP_007
+
+スター進化整合性
+
+---
+
+条件
+
+進化元変化
+
+---
+
+処理
+
+再構築
+
+---
+
+# 18. 実行順序
+
+Layer Recalculate
+
+↓
+
+Core SBA
+
+↓
+
+Zone Integrity
+
+↓
+
+AutoProcess
+
+↓
+
+Trigger Register
+
+↓
+
+Trigger Resolve
+
+---
+
+# 19. 優先度
+
+Priority 1
+
+Power0
+
+---
+
+Priority 2
+
+Zone Integrity
+
+---
+
+Priority 3
+
+Automatic Process
+
+---
+
+Priority 4
+
+Win Lose
+
+---
+
+# 20. SBA Event
+
+実行時イベント発火
+
+BeforeSBA
+
+AfterSBA
+
+---
+
+例
+
+Destroy by SBA
+
+↓
+
+OnDestroy
+
+発火
+
+---
+
+# 21. SBA Context
+
+struct FSBAContext
+{
+SBAID;
+Source;
+Target;
+Reason;
+}
+
+---
+
+# 22. AutoProcess Context
+
+struct FAutoProcessContext
+{
+ProcessID;
+SourceCard;
+Condition;
+}
+
+---
+
+# 23. JSON定義例
+
+{
+"Type":"SBA",
+
+"Condition":
+{
+"Power":"<=0"
+},
+
+"Action":"Destroy"
+}
+
+---
+
+# 24. JSON定義例
+
+{
+"Type":"AutoProcess",
+
+"Condition":
+{
+"SealCount":0
+},
+
+"Action":"ForbiddenRelease"
+}
+
+---
+
+# 25. Rule Engine統合
+
+Action
+
+↓
+
+Replacement
+
+↓
+
+Action Execute
+
+↓
+
+Layer Recalculate
+
+↓
+
+SBA Loop
+
+↓
+
+Trigger Register
+
+↓
+
+Trigger Resolve
+
+↓
+
+Next Action
+
+---
+
+# 26. 決定論保証
+
+同じ盤面
+
+↓
+
+同じLayer
+
+↓
+
+同じSBA結果
+
+↓
+
+同じTrigger結果
+
+---
+
+完全再現保証
+
+### この仕様の次に作るべきもの
+
+ここまで来ると、
+
+```text
+Rule Engine
+Action Queue
+DSL
+Bytecode VM
+DMQL
+Continuous Layer
+SBA
+```
+
+が揃います。
+
+実は紙DM完全再現で最後に残る最大の仕様は、
+
+```text
+Priority & Resolution System Specification
+```
+
+です。
+
+なぜならデュエマには、
+
+```text
+同時に5体破壊された
+
+同時に10個誘発した
+
+複数の置換効果が適用可能
+
+同時に覚醒条件を満たした
+```
+
+という「解決順問題」があり、ここを定義しないと完全再現エンジンにはなりません。
+
+なのでアーキテクチャ全体で見ると次の仕様書は
+
+```text
+Priority & Resolution System Specification
+```
+
+になります。これが完成すると、DMVMのコアルール群はほぼ完成です。

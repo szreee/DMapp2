@@ -1,0 +1,87 @@
+# Cost Payment Specification v1.0
+
+## 支払い手順
+
+1 宣言
+
+2 コスト決定
+
+3 修正適用
+
+4 マナ選択
+
+5 文明確認
+
+6 タップ
+
+7 支払い完了
+
+---
+
+# CostCalculation
+
+```json
+{
+  "BaseCost":7,
+  "Modifier":-2
+}
+```
+
+---
+
+# CivilizationRequirement
+
+例
+
+火文明
+
+```json
+{
+  "RequiredCivilization":
+  [
+    "Fire"
+  ]
+}
+```
+
+---
+
+# 多色
+
+火自然
+
+```json
+{
+  "RequiredCivilization":
+  [
+    "Fire",
+    "Nature"
+  ]
+}
+```
+
+どちらか含めば成立。
+
+---
+
+# 特殊支払い
+
+## コスト軽減
+
+## コスト増加
+
+## 代替コスト
+
+## コスト踏み倒し
+
+すべてModifierとして処理。
+
+---
+
+# 支払い可能判定
+
+```cpp
+CanPayCost()
+```
+
+で一元管理。
